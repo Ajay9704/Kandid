@@ -22,7 +22,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { Search, Plus, Mail, Building, Calendar } from 'lucide-react'
+import { Search, Plus, Mail, Building, Calendar, Linkedin, User, Send, Eye } from 'lucide-react'
 import { useToast } from '@/lib/hooks/use-toast'
 
 interface Lead {
@@ -30,8 +30,16 @@ interface Lead {
   name: string
   email: string
   company?: string | null
+  position?: string | null
+  linkedinUrl?: string | null
+  profileImage?: string | null
+  location?: string | null
   status: string
+  connectionStatus: string
+  sequenceStep: number
   lastContactDate?: string | null
+  lastActivity?: string | null
+  lastActivityDate?: string | null
   notes?: string | null
   campaignId: string
   userId: string
@@ -47,6 +55,14 @@ const statusColors = {
   new: 'bg-gray-100 text-gray-800',
   qualified: 'bg-green-100 text-green-800',
   nurturing: 'bg-orange-100 text-orange-800',
+}
+
+const connectionStatusColors = {
+  not_connected: 'bg-gray-100 text-gray-800',
+  request_sent: 'bg-blue-100 text-blue-800',
+  connected: 'bg-green-100 text-green-800',
+  request_received: 'bg-yellow-100 text-yellow-800',
+  do_not_contact: 'bg-red-100 text-red-800',
 }
 
 async function fetchLeads(): Promise<Lead[]> {
@@ -103,6 +119,8 @@ export default function LeadsPage() {
   const { data: leads = [], isLoading, error } = useQuery({
     queryKey: ['leads'],
     queryFn: fetchLeads,
+    staleTime: 5000, // Consider data fresh for 5 seconds
+    refetchOnWindowFocus: false, // Don't refetch on window focus
   })
 
   const createLeadMutation = useMutation({
@@ -126,29 +144,32 @@ export default function LeadsPage() {
   })
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({ leadId, status }: { leadId: string; status: string }) => 
+    mutationFn: ({ leadId, status }: { leadId: string; status: string }) =>
       updateLeadStatus(leadId, status),
     onSuccess: (updatedLead) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
       setSelectedLead(updatedLead)
       toast({
         title: "Status updated",
         description: `Lead status changed to ${updatedLead.status}.`,
       })
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error('Status update error:', error)
       toast({
-        title: "Error",
-        description: "Failed to update lead status. Please try again.",
+        title: "Update failed",
+        description: error?.message || "Failed to update lead status. Please try again.",
         variant: "destructive",
       })
     },
+    retry: 2, // Retry failed requests twice
   })
 
   const filteredLeads = leads.filter(lead => {
     const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (lead.company && lead.company.toLowerCase().includes(searchTerm.toLowerCase()))
+      lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (lead.company && lead.company.toLowerCase().includes(searchTerm.toLowerCase()))
     const matchesStatus = statusFilter === 'all' || lead.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -245,8 +266,8 @@ export default function LeadsPage() {
                   placeholder="Add any notes"
                 />
               </div>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="w-full"
                 disabled={createLeadMutation.isPending}
               >
@@ -314,35 +335,90 @@ export default function LeadsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Lead Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
+                <TableHead>Company & Position</TableHead>
+                <TableHead>Connection Status</TableHead>
+                <TableHead>Sequence Step</TableHead>
+                <TableHead>Last Activity</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredLeads.map((lead) => (
                 <TableRow key={lead.id}>
-                  <TableCell className="font-medium">{lead.name}</TableCell>
-                  <TableCell>{lead.email}</TableCell>
-                  <TableCell>{lead.company || 'N/A'}</TableCell>
                   <TableCell>
-                    <Badge className={statusColors[lead.status as keyof typeof statusColors] || statusColors.pending}>
-                      {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                        <User className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <div className="font-medium">{lead.name}</div>
+                        <div className="text-sm text-muted-foreground">{lead.email}</div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{lead.company || 'N/A'}</div>
+                      <div className="text-sm text-muted-foreground">{lead.position || 'Position not specified'}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={connectionStatusColors[lead.connectionStatus as keyof typeof connectionStatusColors] || connectionStatusColors.not_connected}>
+                      {lead.connectionStatus?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Not Connected'}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {new Date(lead.createdAt).toLocaleDateString()}
+                    <div className="flex items-center space-x-2">
+                      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium">
+                        {lead.sequenceStep || 0}
+                      </div>
+                      <span className="text-sm">
+                        {lead.sequenceStep === 0 ? 'Not Started' : 
+                         lead.sequenceStep === 1 ? 'Connection Request' :
+                         lead.sequenceStep === 2 ? 'Follow-up 1' :
+                         lead.sequenceStep === 3 ? 'Follow-up 2' : 
+                         `Step ${lead.sequenceStep}`}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedLead(lead)}
-                    >
-                      View Details
-                    </Button>
+                    <div>
+                      <div className="text-sm font-medium">{lead.lastActivity || 'No activity'}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {lead.lastActivityDate ? new Date(lead.lastActivityDate).toLocaleDateString() : ''}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedLead(lead)}
+                        className="transition-all duration-200 hover:bg-muted"
+                        title="View Profile & Status"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      {lead.linkedinUrl && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(lead.linkedinUrl || '', '_blank')}
+                          title="LinkedIn Profile"
+                        >
+                          <Linkedin className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(`mailto:${lead.email}`, '_blank')}
+                        title="Send Email"
+                      >
+                        <Mail className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -367,7 +443,7 @@ export default function LeadsPage() {
                   Lead details and interaction history
                 </SheetDescription>
               </SheetHeader>
-              
+
               <div className="mt-6 space-y-6">
                 {/* Contact Information */}
                 <div>
@@ -392,9 +468,72 @@ export default function LeadsPage() {
                   </div>
                 </div>
 
-                {/* Status */}
+                {/* LinkedIn Connection Status */}
                 <div>
-                  <h3 className="text-lg font-semibold mb-3">Status</h3>
+                  <h3 className="text-lg font-semibold mb-3">LinkedIn Connection Status</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center space-x-2">
+                        <div className={`w-3 h-3 rounded-full ${
+                          selectedLead.connectionStatus === 'connected' ? 'bg-green-500' :
+                          selectedLead.connectionStatus === 'request_sent' ? 'bg-blue-500' :
+                          'bg-gray-400'
+                        }`}></div>
+                        <span className="font-medium">
+                          {selectedLead.connectionStatus === 'connected' ? 'Connected' :
+                           selectedLead.connectionStatus === 'request_sent' ? 'Request Sent' :
+                           'Not Connected'}
+                        </span>
+                      </div>
+                      <Badge className={connectionStatusColors[selectedLead.connectionStatus as keyof typeof connectionStatusColors] || connectionStatusColors.not_connected}>
+                        {selectedLead.connectionStatus?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Not Connected'}
+                      </Badge>
+                    </div>
+                    
+                    {/* Sequence Progress */}
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium">Sequence Progress</span>
+                        <span className="text-sm text-muted-foreground">Step {selectedLead.sequenceStep || 0}/4</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className={`flex items-center space-x-2 text-sm ${selectedLead.sequenceStep >= 1 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          <div className={`w-2 h-2 rounded-full ${selectedLead.sequenceStep >= 1 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                          <span>Connection Request {selectedLead.sequenceStep >= 1 ? '✓' : ''}</span>
+                        </div>
+                        <div className={`flex items-center space-x-2 text-sm ${selectedLead.sequenceStep >= 2 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          <div className={`w-2 h-2 rounded-full ${selectedLead.sequenceStep >= 2 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                          <span>Connection Acceptance {selectedLead.sequenceStep >= 2 ? '✓' : ''}</span>
+                        </div>
+                        <div className={`flex items-center space-x-2 text-sm ${selectedLead.sequenceStep >= 3 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          <div className={`w-2 h-2 rounded-full ${selectedLead.sequenceStep >= 3 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                          <span>Follow-up Message 1 {selectedLead.sequenceStep >= 3 ? '✓' : ''}</span>
+                        </div>
+                        <div className={`flex items-center space-x-2 text-sm ${selectedLead.sequenceStep >= 4 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          <div className={`w-2 h-2 rounded-full ${selectedLead.sequenceStep >= 4 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                          <span>Follow-up Message 2 {selectedLead.sequenceStep >= 4 ? '✓' : ''}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Last Activity */}
+                    {selectedLead.lastActivity && (
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                        <div className="font-medium text-sm">Latest Activity</div>
+                        <div className="text-sm text-muted-foreground">{selectedLead.lastActivity}</div>
+                        {selectedLead.lastActivityDate && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {new Date(selectedLead.lastActivityDate).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Lead Status */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Lead Status</h3>
                   <Badge className={statusColors[selectedLead.status as keyof typeof statusColors] || statusColors.pending}>
                     {selectedLead.status.charAt(0).toUpperCase() + selectedLead.status.slice(1)}
                   </Badge>
@@ -413,24 +552,45 @@ export default function LeadsPage() {
                 {/* Status Update */}
                 <div>
                   <h3 className="text-lg font-semibold mb-3">Update Status</h3>
-                  <select
-                    value={selectedLead.status}
-                    onChange={(e) => {
-                      updateStatusMutation.mutate({
-                        leadId: selectedLead.id,
-                        status: e.target.value
-                      })
-                    }}
-                    className="w-full px-3 py-2 border rounded-md bg-background"
-                    disabled={updateStatusMutation.isPending}
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="contacted">Contacted</option>
-                    <option value="responded">Responded</option>
-                    <option value="qualified">Qualified</option>
-                    <option value="nurturing">Nurturing</option>
-                    <option value="converted">Converted</option>
-                  </select>
+                  <div className="space-y-3">
+                    <select
+                      value={selectedLead.status}
+                      onChange={(e) => {
+                        setSelectedLead({ ...selectedLead, status: e.target.value })
+                      }}
+                      className="w-full px-3 py-2 border rounded-md bg-background"
+                      disabled={updateStatusMutation.isPending}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="contacted">Contacted</option>
+                      <option value="responded">Responded</option>
+                      <option value="qualified">Qualified</option>
+                      <option value="nurturing">Nurturing</option>
+                      <option value="converted">Converted</option>
+                    </select>
+                    <div className="flex space-x-2">
+                      <Button
+                        onClick={() => {
+                          updateStatusMutation.mutate({
+                            leadId: selectedLead.id,
+                            status: selectedLead.status
+                          })
+                        }}
+                        disabled={updateStatusMutation.isPending}
+                        className="flex-1"
+                        type="button"
+                      >
+                        {updateStatusMutation.isPending ? 'Saving...' : 'Save Changes'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setSelectedLead(null)}
+                        disabled={updateStatusMutation.isPending}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Actions */}

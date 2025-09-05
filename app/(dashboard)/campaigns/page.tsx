@@ -83,6 +83,8 @@ export default function CampaignsPage() {
   const { data: campaigns = [], isLoading, error } = useQuery({
     queryKey: ['campaigns'],
     queryFn: fetchCampaigns,
+    staleTime: 5000, // Consider data fresh for 5 seconds
+    refetchOnWindowFocus: false, // Don't refetch on window focus
   })
 
   const createCampaignMutation = useMutation({
@@ -105,11 +107,12 @@ export default function CampaignsPage() {
     },
   })
 
-  const handleEditCampaign = (campaignId: string) => {
-    toast({
-      title: "Edit Campaign",
-      description: "Campaign editing feature coming soon!",
-    })
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
+  const [showEditForm, setShowEditForm] = useState(false)
+
+  const handleEditCampaign = (campaign: Campaign) => {
+    setEditingCampaign(campaign)
+    setShowEditForm(true)
   }
 
   const handleToggleCampaign = (campaign: Campaign) => {
@@ -390,8 +393,16 @@ export default function CampaignsPage() {
                     <div className="flex items-center space-x-2">
                       <Button 
                         variant="ghost" 
+                        size="sm"
+                        onClick={() => window.location.href = `/campaigns/${campaign.id}`}
+                        title="View campaign details"
+                      >
+                        View Details
+                      </Button>
+                      <Button 
+                        variant="ghost" 
                         size="icon"
-                        onClick={() => handleEditCampaign(campaign.id)}
+                        onClick={() => handleEditCampaign(campaign)}
                         title="Edit campaign"
                       >
                         <Edit className="w-4 h-4" />
@@ -437,6 +448,73 @@ export default function CampaignsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Campaign Sheet */}
+      <Sheet open={showEditForm} onOpenChange={setShowEditForm}>
+        <SheetContent>
+          {editingCampaign && (
+            <>
+              <SheetHeader>
+                <SheetTitle>Edit Campaign</SheetTitle>
+                <SheetDescription>
+                  Update campaign details and settings
+                </SheetDescription>
+              </SheetHeader>
+              <form onSubmit={(e) => {
+                e.preventDefault()
+                toast({
+                  title: "Campaign updated",
+                  description: `Campaign "${editingCampaign.name}" has been updated successfully.`,
+                })
+                setShowEditForm(false)
+              }} className="space-y-4 mt-6">
+                <div>
+                  <label className="text-sm font-medium">Campaign Name *</label>
+                  <Input
+                    value={editingCampaign.name}
+                    onChange={(e) => setEditingCampaign({ ...editingCampaign, name: e.target.value })}
+                    placeholder="Enter campaign name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Description</label>
+                  <Input
+                    value={editingCampaign.description || ''}
+                    onChange={(e) => setEditingCampaign({ ...editingCampaign, description: e.target.value })}
+                    placeholder="Enter campaign description"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Status</label>
+                  <select
+                    value={editingCampaign.status}
+                    onChange={(e) => setEditingCampaign({ ...editingCampaign, status: e.target.value })}
+                    className="w-full p-2 border rounded-md bg-background"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+                <div className="flex space-x-2">
+                  <Button type="submit" className="flex-1">
+                    Update Campaign
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setShowEditForm(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

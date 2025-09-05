@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
+import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -19,13 +20,20 @@ import {
   LogOut,
   User,
   Activity,
-  Zap
+  Zap,
+  Sun,
+  Moon,
+  Monitor,
+  Mail
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Leads', href: '/leads', icon: Users },
   { name: 'Campaigns', href: '/campaigns', icon: Target },
+  { name: 'LinkedIn Accounts', href: '/linkedin-accounts', icon: User },
+  { name: 'Messages', href: '/messages', icon: Mail },
+  { name: 'Activity Logs', href: '/activity', icon: Activity },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
@@ -69,7 +77,8 @@ export function Sidebar() {
   const pathname = usePathname()
   const { sidebarCollapsed, setSidebarCollapsed } = useAppStore()
   const { data: session } = useSession()
-  const { isConnected } = useSocket()
+  const { isConnected, toggleConnection, manuallyDisconnected } = useSocket()
+  const { theme, setTheme } = useTheme()
   
   const { data: stats } = useQuery({
     queryKey: ['sidebar-stats'],
@@ -120,9 +129,14 @@ export function Sidebar() {
                 {isConnected ? 'Live' : 'Offline'}
               </span>
             </div>
-            {isConnected && (
-              <Zap className="w-3 h-3 text-yellow-500" />
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleConnection}
+              className="h-6 px-2 text-xs"
+            >
+              {manuallyDisconnected ? 'Connect' : 'Disconnect'}
+            </Button>
           </div>
         </div>
       )}
@@ -187,6 +201,41 @@ export function Sidebar() {
         })}
       </nav>
 
+      {/* Theme Toggle */}
+      {!sidebarCollapsed && (
+        <div className="px-4 py-2 border-t">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-muted-foreground">Theme</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            <Button
+              variant={theme === 'light' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setTheme('light')}
+              className="h-8 px-2"
+            >
+              <Sun className="w-3 h-3" />
+            </Button>
+            <Button
+              variant={theme === 'dark' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setTheme('dark')}
+              className="h-8 px-2"
+            >
+              <Moon className="w-3 h-3" />
+            </Button>
+            <Button
+              variant={theme === 'system' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setTheme('system')}
+              className="h-8 px-2"
+            >
+              <Monitor className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* User Profile */}
       <div className="p-4 border-t">
         {session?.user ? (
@@ -215,7 +264,21 @@ export function Sidebar() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => signOut()}
+              onClick={async () => {
+                try {
+                  await signOut({
+                    fetchOptions: {
+                      onSuccess: () => {
+                        window.location.href = '/auth/signin'
+                      }
+                    }
+                  })
+                } catch (error) {
+                  console.error('Sign out error:', error)
+                  // Force redirect even if sign out fails
+                  window.location.href = '/auth/signin'
+                }
+              }}
               className={cn(
                 'w-full justify-start text-muted-foreground hover:text-red-600',
                 sidebarCollapsed && 'px-2'

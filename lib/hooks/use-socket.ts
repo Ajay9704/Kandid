@@ -3,22 +3,36 @@
 import { useEffect, useState } from 'react'
 
 export const useSocket = () => {
-  const [isConnected, setIsConnected] = useState(false)
+  const [isConnected, setIsConnected] = useState(true)
+  const [manuallyDisconnected, setManuallyDisconnected] = useState(false)
 
   useEffect(() => {
-    // Simulate connection status - in a real app this would connect to a socket server
-    setIsConnected(true)
-    
-    // Simulate occasional disconnections for demo purposes
-    const interval = setInterval(() => {
-      setIsConnected(prev => {
-        // 95% chance to stay connected
-        return Math.random() > 0.05 ? true : prev
-      })
-    }, 5000)
+    if (!manuallyDisconnected) {
+      // Simulate connection status - in a real app this would connect to a socket server
+      setIsConnected(true)
+      
+      // Simulate occasional disconnections for demo purposes
+      const interval = setInterval(() => {
+        setIsConnected(prev => {
+          // 98% chance to stay connected
+          return Math.random() > 0.02 ? true : prev
+        })
+      }, 10000)
 
-    return () => clearInterval(interval)
-  }, [])
+      return () => clearInterval(interval)
+    } else {
+      setIsConnected(false)
+    }
+  }, [manuallyDisconnected])
 
-  return { socket: null, isConnected }
+  const toggleConnection = () => {
+    setManuallyDisconnected(!manuallyDisconnected)
+  }
+
+  return { 
+    socket: null, 
+    isConnected: !manuallyDisconnected && isConnected,
+    toggleConnection,
+    manuallyDisconnected
+  }
 }

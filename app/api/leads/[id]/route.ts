@@ -52,6 +52,33 @@ export async function PUT(
   }
 }
 
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json()
+    const { status } = body
+
+    const updatedLead = await db.update(leads)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(leads.id, params.id))
+      .returning()
+
+    if (updatedLead.length === 0) {
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 })
+    }
+
+    return NextResponse.json(updatedLead[0])
+  } catch (error) {
+    console.error("Error updating lead status:", error)
+    return NextResponse.json({ error: "Failed to update lead status" }, { status: 500 })
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }

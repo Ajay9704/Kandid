@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { 
   Users, 
+  User,
   Target, 
   TrendingUp, 
   Mail,
@@ -128,32 +129,42 @@ const statusColors = {
 }
 
 export default function DashboardPage() {
-  const { isConnected } = useSocket()
+  const { isConnected, toggleConnection, manuallyDisconnected } = useSocket()
   const { toast } = useToast()
+  const [liveViewEnabled, setLiveViewEnabled] = useState(false)
   
   const { data: stats, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: fetchDashboardStats,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: liveViewEnabled && isConnected ? 15000 : false, // Only refetch when live view is enabled
+    staleTime: 5000, // Consider data fresh for 5 seconds
   })
 
   useEffect(() => {
     // Simulate real-time updates for demo purposes
-    if (isConnected) {
+    if (isConnected && liveViewEnabled) {
       const interval = setInterval(() => {
-        // Occasionally show a demo notification
-        if (Math.random() > 0.95) {
+        // Show periodic updates when live view is enabled
+        if (Math.random() > 0.8) {
+          const updates = [
+            "New lead added to pipeline",
+            "Campaign response received",
+            "Lead status updated",
+            "Dashboard metrics refreshed"
+          ]
+          const randomUpdate = updates[Math.floor(Math.random() * updates.length)]
+          
           toast({
-            title: "Real-time Update",
-            description: "Dashboard data refreshed",
+            title: "Live Update",
+            description: randomUpdate,
           })
           refetch()
         }
-      }, 10000)
+      }, 5000)
       
       return () => clearInterval(interval)
     }
-  }, [isConnected, toast, refetch])
+  }, [isConnected, liveViewEnabled, toast, refetch])
 
   const currentStats = stats
 
@@ -204,15 +215,46 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            <span className="text-sm text-muted-foreground">
-              {isConnected ? 'Real-time connected' : 'Offline'}
+          <div className="flex items-center space-x-2 px-3 py-1 rounded-full bg-muted/50">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+            <span className="text-sm font-medium">
+              {isConnected ? 'Online' : 'Offline'}
             </span>
+            {manuallyDisconnected && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleConnection}
+                className="h-6 px-2 text-xs"
+              >
+                Connect
+              </Button>
+            )}
           </div>
-          <Button variant="outline" size="sm">
-            <Activity className="w-4 h-4 mr-2" />
-            Live View
+          <Button 
+            variant={liveViewEnabled ? "default" : "outline"} 
+            size="sm"
+            onClick={() => {
+              if (!isConnected && !liveViewEnabled) {
+                toast({
+                  title: "Connection Required",
+                  description: "Please connect to enable live view.",
+                  variant: "destructive",
+                })
+                return
+              }
+              setLiveViewEnabled(!liveViewEnabled)
+              toast({
+                title: liveViewEnabled ? "Live View Disabled" : "Live View Enabled",
+                description: liveViewEnabled 
+                  ? "Real-time updates have been disabled" 
+                  : "Dashboard will now update in real-time",
+              })
+            }}
+            disabled={!isConnected}
+          >
+            <Activity className={`w-4 h-4 mr-2 ${liveViewEnabled && isConnected ? 'animate-pulse' : ''}`} />
+            {liveViewEnabled ? 'Live View On' : 'Live View'}
           </Button>
         </div>
       </div>
@@ -276,65 +318,110 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Charts and Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Lead Status Distribution */}
+      {/* LinkedIn Overview & Active Connections */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* LinkedIn Accounts Status */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <PieChart className="w-5 h-5 mr-2" />
-              Lead Status Distribution
+              <User className="w-5 h-5 mr-2" />
+              LinkedIn Accounts
             </CardTitle>
             <CardDescription>
-              Breakdown of leads by current status
+              Active LinkedIn profiles
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {currentStats?.leadsByStatus.map((item) => {
-              const statusConfig = statusColors[item.status as keyof typeof statusColors] || statusColors.pending
-              const IconComponent = statusConfig.icon
-              
-              return (
-                <div key={item.status} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <IconComponent className="w-4 h-4 text-muted-foreground" />
-                    <span className="capitalize font-medium">{item.status}</span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Progress value={item.percentage} className="w-20" />
-                    <Badge className={`${statusConfig.bg} ${statusConfig.text}`}>
-                      {item.count}
-                    </Badge>
-                  </div>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 text-white" />
                 </div>
-              )
-            })}
+                <div>
+                  <p className="font-medium text-sm">John Smith</p>
+                  <p className="text-xs text-muted-foreground">Active • 45/50 daily</p>
+                </div>
+              </div>
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Sarah Johnson</p>
+                  <p className="text-xs text-muted-foreground">Paused • 0/50 daily</p>
+                </div>
+              </div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Campaign Performance */}
+        {/* Active Connections */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <BarChart3 className="w-5 h-5 mr-2" />
-              Campaign Performance
+              <CheckCircle className="w-5 h-5 mr-2" />
+              Active Connections
             </CardTitle>
             <CardDescription>
-              Top performing campaigns this month
+              Recent connection activity
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {currentStats?.campaignPerformance.slice(0, 5).map((campaign) => (
-              <div key={campaign.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-3 h-3 text-green-600" />
+                </div>
+                <span className="text-sm">Accepted</span>
+              </div>
+              <Badge className="bg-green-100 text-green-800">24</Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Clock className="w-3 h-3 text-blue-600" />
+                </div>
+                <span className="text-sm">Pending</span>
+              </div>
+              <Badge className="bg-blue-100 text-blue-800">12</Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center">
+                  <Mail className="w-3 h-3 text-yellow-600" />
+                </div>
+                <span className="text-sm">Replied</span>
+              </div>
+              <Badge className="bg-yellow-100 text-yellow-800">8</Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Active Campaigns */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Target className="w-5 h-5 mr-2" />
+              Active Campaigns
+            </CardTitle>
+            <CardDescription>
+              Running campaigns status
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {currentStats?.campaignPerformance.filter(c => c.status === 'active').slice(0, 3).map((campaign) => (
+              <div key={campaign.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
                 <div>
-                  <p className="font-medium">{campaign.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {campaign.leads} leads • {campaign.responseRate.toFixed(1)}% response rate
+                  <p className="font-medium text-sm">{campaign.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {campaign.leads} leads • {campaign.responseRate.toFixed(1)}% response
                   </p>
                 </div>
-                <Badge variant={campaign.status === 'active' ? 'default' : 'secondary'}>
-                  {campaign.status}
-                </Badge>
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               </div>
             ))}
           </CardContent>
