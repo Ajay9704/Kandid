@@ -237,7 +237,7 @@ Live demo: [Your Vercel URL]
 
 Demo credentials:
 - Email: demo@linkbird.com
-- Password: demo123
+- Password: demo123456
 
 ---
 
