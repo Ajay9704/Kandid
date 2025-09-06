@@ -7,22 +7,16 @@ async function seedData() {
   console.log('🌱 Seeding database with sample data...')
   
   try {
-    // First create a sample user
-    const sampleUser = {
-      id: 'default-user',
-      name: 'Demo User',
-      email: 'demo@linkbird.com',
-      emailVerified: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    // Get the existing demo user
+    const existingUser = await db.select().from(user).where(eq(user.email, 'demo@linkbird.com')).limit(1)
+    
+    if (existingUser.length === 0) {
+      console.log('❌ Demo user not found. Please run "npm run create-demo-user" first.')
+      process.exit(1)
     }
-
-    const insertedUser = await db.insert(user).values(sampleUser).onConflictDoNothing().returning()
-    if (insertedUser.length > 0) {
-      console.log(`✅ Created sample user: ${insertedUser[0].email}`)
-    } else {
-      console.log(`✅ Sample user already exists: ${sampleUser.email}`)
-    }
+    
+    const demoUserId = existingUser[0].id
+    console.log(`✅ Using existing demo user: ${existingUser[0].email} (ID: ${demoUserId})`)
 
     // Create sample campaigns
     const sampleCampaigns = [
@@ -34,7 +28,7 @@ async function seedData() {
         totalLeads: 0,
         successfulLeads: 0,
         responseRate: 0.0,
-        userId: 'default-user',
+        userId: demoUserId,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
@@ -46,7 +40,7 @@ async function seedData() {
         totalLeads: 0,
         successfulLeads: 0,
         responseRate: 0.0,
-        userId: 'default-user',
+        userId: demoUserId,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
@@ -58,7 +52,7 @@ async function seedData() {
         totalLeads: 0,
         successfulLeads: 0,
         responseRate: 0.0,
-        userId: 'default-user',
+        userId: demoUserId,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
@@ -155,13 +149,33 @@ async function seedData() {
         linkedinUrl: 'https://linkedin.com/in/alexrodriguez',
         location: 'Miami, FL',
         status: 'nurturing',
-        connectionStatus: 'request_sent',
+        connectionStatus: 'request_received',
         sequenceStep: 1,
         lastContactDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-        lastActivity: 'Connection request sent',
+        lastActivity: 'Connection request received',
         lastActivityDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
         notes: 'Needs more information about pricing',
         campaignId: insertedCampaigns.length > 2 ? insertedCampaigns[2].id : 'campaign-3',
+        userId: 'default-user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: nanoid(),
+        name: 'David Wilson',
+        email: 'david@techstart.com',
+        company: 'TechStart Inc',
+        position: 'Founder',
+        linkedinUrl: 'https://linkedin.com/in/davidwilson',
+        location: 'Boston, MA',
+        status: 'pending',
+        connectionStatus: 'request_received',
+        sequenceStep: 0,
+        lastContactDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+        lastActivity: 'Connection request received',
+        lastActivityDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+        notes: 'Potential high-value client',
+        campaignId: insertedCampaigns.length > 0 ? insertedCampaigns[0].id : 'campaign-1',
         userId: 'default-user',
         createdAt: new Date(),
         updatedAt: new Date(),

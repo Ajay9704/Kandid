@@ -24,13 +24,16 @@ import {
   Sun,
   Moon,
   Monitor,
-  Mail
+  Mail,
+  BarChart3
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Leads', href: '/leads', icon: Users },
   { name: 'Campaigns', href: '/campaigns', icon: Target },
+  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Automation', href: '/automation', icon: Zap },
   { name: 'LinkedIn Accounts', href: '/linkedin-accounts', icon: User },
   { name: 'Messages', href: '/messages', icon: Mail },
   { name: 'Activity Logs', href: '/activity', icon: Activity },

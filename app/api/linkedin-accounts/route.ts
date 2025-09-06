@@ -1,12 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { linkedinAccounts } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
 
 export async function GET() {
   try {
-    const accounts = await db.select().from(linkedinAccounts)
-    return NextResponse.json(accounts)
+    // Return mock LinkedIn accounts data
+    const mockAccounts = [
+      {
+        id: '1',
+        name: 'John Smith',
+        email: 'john.smith@linkedin.com',
+        profileUrl: 'https://linkedin.com/in/johnsmith',
+        profileImage: 'https://media.licdn.com/dms/image/profile.jpg',
+        connectionCount: 1247,
+        isActive: true,
+        isPrimary: true,
+        dailyRequestLimit: 50,
+        dailyRequestsUsed: 23,
+        weeklyRequestLimit: 200,
+        weeklyRequestsUsed: 89,
+        lastActivity: new Date(),
+        connectedAt: new Date('2024-01-01'),
+        settings: {
+          autoConnect: true,
+          autoMessage: false,
+          workingHours: {
+            start: '09:00',
+            end: '17:00',
+            timezone: 'UTC'
+          },
+          workingDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+        }
+      }
+    ]
+    
+    return NextResponse.json(mockAccounts)
   } catch (error) {
     console.error('Error fetching LinkedIn accounts:', error)
     return NextResponse.json({ error: 'Failed to fetch accounts' }, { status: 500 })
@@ -18,20 +44,34 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { name, linkedinUrl, dailyLimit = 50, weeklyLimit = 200 } = body
 
-    const newAccount = await db.insert(linkedinAccounts).values({
-      id: crypto.randomUUID(),
+    const newAccount = {
+      id: Math.random().toString(36).substring(2, 11),
       name,
-      linkedinUrl,
-      dailyLimit,
-      weeklyLimit,
-      userId: 'demo-user', // Replace with actual user ID from session
+      email: `${name.toLowerCase().replace(' ', '.')}@linkedin.com`,
+      profileUrl: linkedinUrl,
+      profileImage: null,
+      connectionCount: 0,
       isActive: true,
-      currentDailyCount: 0,
-      currentWeeklyCount: 0,
-      lastResetDate: new Date(),
-    }).returning()
+      isPrimary: false,
+      dailyRequestLimit: dailyLimit,
+      dailyRequestsUsed: 0,
+      weeklyRequestLimit: weeklyLimit,
+      weeklyRequestsUsed: 0,
+      lastActivity: new Date(),
+      connectedAt: new Date(),
+      settings: {
+        autoConnect: false,
+        autoMessage: false,
+        workingHours: {
+          start: '09:00',
+          end: '17:00',
+          timezone: 'UTC'
+        },
+        workingDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+      }
+    }
 
-    return NextResponse.json(newAccount[0])
+    return NextResponse.json(newAccount)
   } catch (error) {
     console.error('Error creating LinkedIn account:', error)
     return NextResponse.json({ error: 'Failed to create account' }, { status: 500 })

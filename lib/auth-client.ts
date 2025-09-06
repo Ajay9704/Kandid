@@ -1,15 +1,18 @@
 "use client"
 
-import { createAuthClient } from "better-auth/react"
+import { useSession as useNextAuthSession, signIn as nextAuthSignIn, signOut as nextAuthSignOut } from "next-auth/react"
 
-export const authClient = createAuthClient({
-  baseURL: "http://localhost:3000",
-})
+export const useSession = () => {
+  const { data: session, status } = useNextAuthSession()
+  
+  return {
+    data: session,
+    isPending: status === "loading",
+    isAuthenticated: !!session,
+  }
+}
 
-export const { 
-  signIn, 
-  signUp, 
-  signOut, 
-  useSession,
-  getSession 
-} = authClient
+export const signIn = nextAuthSignIn
+export const signOut = nextAuthSignOut
+
+export type Session = ReturnType<typeof useSession>['data']

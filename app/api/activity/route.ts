@@ -1,11 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { activityLogs } from '@/lib/db/schema'
-import { desc } from 'drizzle-orm'
+import { activityLogs, leads } from '@/lib/db/schema'
+import { desc, eq } from 'drizzle-orm'
 
 export async function GET() {
   try {
-    const activities = await db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(50)
+    const activities = await db
+      .select({
+        id: activityLogs.id,
+        activityType: activityLogs.activityType,
+        description: activityLogs.description,
+        metadata: activityLogs.metadata,
+        createdAt: activityLogs.createdAt,
+        leadName: leads.name,
+        company: leads.company,
+        leadId: activityLogs.leadId,
+        campaignId: activityLogs.campaignId,
+      })
+      .from(activityLogs)
+      .leftJoin(leads, eq(activityLogs.leadId, leads.id))
+      .orderBy(desc(activityLogs.createdAt))
+      .limit(50)
+    
     return NextResponse.json(activities)
   } catch (error) {
     console.error('Error fetching activities:', error)

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -79,6 +80,7 @@ export default function CampaignsPage() {
 
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const router = useRouter()
 
   const { data: campaigns = [], isLoading, error } = useQuery({
     queryKey: ['campaigns'],
@@ -394,7 +396,7 @@ export default function CampaignsPage() {
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        onClick={() => window.location.href = `/campaigns/${campaign.id}`}
+                        onClick={() => router.push(`/campaigns/${campaign.id}`)}
                         title="View campaign details"
                       >
                         View Details

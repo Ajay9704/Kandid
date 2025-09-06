@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,7 +23,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { Search, Plus, Mail, Building, Calendar, Linkedin, User, Send, Eye } from 'lucide-react'
+import { Search, Plus, Mail, Building, Calendar, Linkedin, User, Send, Eye, Clock } from 'lucide-react'
 import { useToast } from '@/lib/hooks/use-toast'
 
 interface Lead {
@@ -105,6 +106,7 @@ export default function LeadsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [pendingStatusChange, setPendingStatusChange] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [newLead, setNewLead] = useState({
     name: '',
@@ -400,6 +402,75 @@ export default function LeadsPage() {
                       >
                         <Eye className="w-4 h-4" />
                       </Button>
+                      {(lead.connectionStatus === 'not_connected' || !lead.connectionStatus) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            // Update connection status and lead status
+                            updateStatusMutation.mutate({
+                              leadId: lead.id,
+                              status: 'contacted'
+                            })
+                            toast({
+                              title: "Connection Request Sent",
+                              description: `Connection request sent to ${lead.name}`,
+                            })
+                          }}
+                          title="Send Connection Request"
+                          className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                        >
+                          Send Request
+                        </Button>
+                      )}
+                      {lead.connectionStatus === 'request_received' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            // Update connection status and lead status
+                            updateStatusMutation.mutate({
+                              leadId: lead.id,
+                              status: 'responded'
+                            })
+                            toast({
+                              title: "Connection Accepted",
+                              description: `Connection accepted from ${lead.name}`,
+                            })
+                          }}
+                          title="Accept Connection Request"
+                          className="text-xs bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+                        >
+                          Accept Request
+                        </Button>
+                      )}
+                      {lead.connectionStatus === 'request_sent' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled
+                          title="Connection Request Pending"
+                          className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200"
+                        >
+                          Request Sent
+                        </Button>
+                      )}
+                      {lead.connectionStatus === 'connected' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            toast({
+                              title: "Already Connected",
+                              description: `You are connected with ${lead.name}`,
+                            })
+                          }}
+                          title="Connected"
+                          className="text-xs bg-green-50 text-green-700 border-green-200"
+                        >
+                          Connected
+                        </Button>
+                      )}
                       {lead.linkedinUrl && (
                         <Button
                           variant="ghost"
@@ -474,20 +545,120 @@ export default function LeadsPage() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                       <div className="flex items-center space-x-2">
-                        <div className={`w-3 h-3 rounded-full ${
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
                           selectedLead.connectionStatus === 'connected' ? 'bg-green-500' :
-                          selectedLead.connectionStatus === 'request_sent' ? 'bg-blue-500' :
+                          selectedLead.connectionStatus === 'request_sent' ? 'bg-blue-500 animate-pulse' :
+                          selectedLead.connectionStatus === 'request_received' ? 'bg-yellow-500' :
                           'bg-gray-400'
-                        }`}></div>
+                        }`}>
+                          {selectedLead.connectionStatus === 'connected' && <span className="text-white text-xs">✓</span>}
+                          {selectedLead.connectionStatus === 'request_sent' && <span className="text-white text-xs">→</span>}
+                          {selectedLead.connectionStatus === 'request_received' && <span className="text-white text-xs">←</span>}
+                        </div>
                         <span className="font-medium">
                           {selectedLead.connectionStatus === 'connected' ? 'Connected' :
                            selectedLead.connectionStatus === 'request_sent' ? 'Request Sent' :
+                           selectedLead.connectionStatus === 'request_received' ? 'Request Received' :
+                           selectedLead.connectionStatus === 'following' ? 'Following' :
                            'Not Connected'}
                         </span>
                       </div>
                       <Badge className={connectionStatusColors[selectedLead.connectionStatus as keyof typeof connectionStatusColors] || connectionStatusColors.not_connected}>
-                        {selectedLead.connectionStatus?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Not Connected'}
+                        {selectedLead.connectionStatus === 'connected' ? 'Connected' :
+                         selectedLead.connectionStatus === 'request_sent' ? 'Request Sent' :
+                         selectedLead.connectionStatus === 'request_received' ? 'Request Received' :
+                         selectedLead.connectionStatus === 'following' ? 'Following' :
+                         'Not Connected'}
                       </Badge>
+                    </div>
+                    
+                    {/* Connection Actions */}
+                    <div className="flex space-x-2">
+                      {(selectedLead.connectionStatus === 'not_connected' || !selectedLead.connectionStatus) && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            updateStatusMutation.mutate({
+                              leadId: selectedLead.id,
+                              status: 'contacted'
+                            })
+                            toast({
+                              title: "Connection Request Sent",
+                              description: `Connection request sent to ${selectedLead.name}`,
+                            })
+                          }}
+                          className="flex-1"
+                        >
+                          Send Connection Request
+                        </Button>
+                      )}
+                      {selectedLead.connectionStatus === 'request_received' && (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              updateStatusMutation.mutate({
+                                leadId: selectedLead.id,
+                                status: 'responded'
+                              })
+                              toast({
+                                title: "Connection Accepted",
+                                description: `Connection accepted from ${selectedLead.name}`,
+                              })
+                            }}
+                            className="flex-1"
+                          >
+                            Accept Request
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              toast({
+                                title: "Request Declined",
+                                description: `Connection request from ${selectedLead.name} declined`,
+                              })
+                            }}
+                          >
+                            Decline
+                          </Button>
+                        </>
+                      )}
+                      {selectedLead.connectionStatus === 'request_sent' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled
+                          className="flex-1"
+                        >
+                          Request Pending...
+                        </Button>
+                      )}
+                      {selectedLead.connectionStatus === 'connected' && (
+                        <div className="flex space-x-2 w-full">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              window.open(`mailto:${selectedLead.email}`, '_blank')
+                            }}
+                            className="flex-1"
+                          >
+                            Send Message
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (selectedLead.linkedinUrl) {
+                                window.open(selectedLead.linkedinUrl, '_blank')
+                              }
+                            }}
+                          >
+                            View Profile
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     
                     {/* Sequence Progress */}
@@ -553,41 +724,100 @@ export default function LeadsPage() {
                 <div>
                   <h3 className="text-lg font-semibold mb-3">Update Status</h3>
                   <div className="space-y-3">
-                    <select
-                      value={selectedLead.status}
-                      onChange={(e) => {
-                        setSelectedLead({ ...selectedLead, status: e.target.value })
-                      }}
-                      className="w-full px-3 py-2 border rounded-md bg-background"
-                      disabled={updateStatusMutation.isPending}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="contacted">Contacted</option>
-                      <option value="responded">Responded</option>
-                      <option value="qualified">Qualified</option>
-                      <option value="nurturing">Nurturing</option>
-                      <option value="converted">Converted</option>
-                    </select>
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <div className="text-sm font-medium mb-2">Current Status</div>
+                      <Badge className={statusColors[selectedLead.status as keyof typeof statusColors] || statusColors.pending}>
+                        {selectedLead.status.charAt(0).toUpperCase() + selectedLead.status.slice(1)}
+                      </Badge>
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Change Status To:</label>
+                      <select
+                        value={pendingStatusChange || selectedLead.status}
+                        onChange={(e) => {
+                          setPendingStatusChange(e.target.value)
+                        }}
+                        className="w-full px-3 py-2 border rounded-md bg-background"
+                        disabled={updateStatusMutation.isPending}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="contacted">Contacted</option>
+                        <option value="responded">Responded</option>
+                        <option value="qualified">Qualified</option>
+                        <option value="nurturing">Nurturing</option>
+                        <option value="converted">Converted</option>
+                      </select>
+                    </div>
+                    
+                    {pendingStatusChange && pendingStatusChange !== selectedLead.status && (
+                      <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-950/30 dark:to-orange-950/30 rounded-lg border-2 border-yellow-200 dark:border-yellow-800">
+                        <div className="flex items-center space-x-2 text-sm text-yellow-800 dark:text-yellow-200 mb-2">
+                          <Clock className="w-4 h-4 animate-pulse" />
+                          <span className="font-semibold">Status Change Pending</span>
+                        </div>
+                        <div className="flex items-center space-x-3 text-sm">
+                          <Badge className={statusColors[selectedLead.status as keyof typeof statusColors] || statusColors.pending}>
+                            {selectedLead.status.charAt(0).toUpperCase() + selectedLead.status.slice(1)}
+                          </Badge>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge className={statusColors[pendingStatusChange as keyof typeof statusColors] || statusColors.pending}>
+                            {pendingStatusChange.charAt(0).toUpperCase() + pendingStatusChange.slice(1)}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-2">
+                          Review the change above and click "Commit Status Change" to save
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="flex space-x-2">
                       <Button
                         onClick={() => {
-                          updateStatusMutation.mutate({
-                            leadId: selectedLead.id,
-                            status: selectedLead.status
-                          })
+                          if (pendingStatusChange) {
+                            updateStatusMutation.mutate({
+                              leadId: selectedLead.id,
+                              status: pendingStatusChange
+                            })
+                            setPendingStatusChange(null)
+                          }
                         }}
-                        disabled={updateStatusMutation.isPending}
-                        className="flex-1"
+                        disabled={updateStatusMutation.isPending || !pendingStatusChange || pendingStatusChange === selectedLead.status}
+                        className={`flex-1 transition-all duration-200 ${
+                          pendingStatusChange && pendingStatusChange !== selectedLead.status 
+                            ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg' 
+                            : ''
+                        }`}
                         type="button"
+                        variant={pendingStatusChange && pendingStatusChange !== selectedLead.status ? "default" : "outline"}
                       >
-                        {updateStatusMutation.isPending ? 'Saving...' : 'Save Changes'}
+                        {updateStatusMutation.isPending ? (
+                          <div className="flex items-center space-x-2">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Committing...</span>
+                          </div>
+                        ) : (
+                          'Commit Status Change'
+                        )}
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={() => setSelectedLead(null)}
+                        onClick={() => {
+                          setPendingStatusChange(null)
+                        }}
                         disabled={updateStatusMutation.isPending}
                       >
-                        Cancel
+                        Reset
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setPendingStatusChange(null)
+                          setSelectedLead(null)
+                        }}
+                        disabled={updateStatusMutation.isPending}
+                      >
+                        Close
                       </Button>
                     </div>
                   </div>

@@ -5,18 +5,18 @@ import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/auth-client'
 
 export default function HomePage() {
-  const { data: session, isLoading } = useSession()
+  const { data: session, isPending } = useSession()
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!isPending) {
       if (session) {
         router.push('/dashboard')
       } else {
         router.push('/auth/signin')
       }
     }
-  }, [session, isLoading, router])
+  }, [session, isPending, router])
 
   return (
     <div className="flex items-center justify-center min-h-screen">

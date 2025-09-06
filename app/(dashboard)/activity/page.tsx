@@ -153,16 +153,16 @@ export default function ActivityPage() {
                   <div key={activity.id} className="flex items-start space-x-4 p-4 rounded-lg border hover:bg-muted/30 transition-colors">
                     <div className="flex-shrink-0">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activity.activityType === 'connection_request_sent' ? 'bg-blue-100 dark:bg-blue-950/30' :
-                          activity.activityType === 'connection_accepted' ? 'bg-green-100 dark:bg-green-950/30' :
-                            activity.activityType === 'message_sent' ? 'bg-purple-100 dark:bg-purple-950/30' :
-                              activity.activityType === 'message_replied' ? 'bg-orange-100 dark:bg-orange-950/30' :
-                                'bg-yellow-100 dark:bg-yellow-950/30'
+                        activity.activityType === 'connection_accepted' ? 'bg-green-100 dark:bg-green-950/30' :
+                          activity.activityType === 'message_sent' ? 'bg-purple-100 dark:bg-purple-950/30' :
+                            activity.activityType === 'message_replied' ? 'bg-orange-100 dark:bg-orange-950/30' :
+                              'bg-yellow-100 dark:bg-yellow-950/30'
                         }`}>
                         <IconComponent className={`w-5 h-5 ${activity.activityType === 'connection_request_sent' ? 'text-blue-600' :
-                            activity.activityType === 'connection_accepted' ? 'text-green-600' :
-                              activity.activityType === 'message_sent' ? 'text-purple-600' :
-                                activity.activityType === 'message_replied' ? 'text-orange-600' :
-                                  'text-yellow-600'
+                          activity.activityType === 'connection_accepted' ? 'text-green-600' :
+                            activity.activityType === 'message_sent' ? 'text-purple-600' :
+                              activity.activityType === 'message_replied' ? 'text-orange-600' :
+                                'text-yellow-600'
                           }`} />
                       </div>
                     </div>
@@ -182,10 +182,11 @@ export default function ActivityPage() {
                         <div className="flex items-center space-x-2">
                           <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                             <span className="text-white text-xs font-medium">
-                              {activity.leadName.split(' ').map(n => n[0]).join('')}
+                              {activity.leadName && typeof activity.leadName === 'string' && activity.leadName.trim() ? 
+                                activity.leadName.split(' ').filter(n => n).map(n => n[0]).join('').toUpperCase() : 'U'}
                             </span>
                           </div>
-                          <span className="text-sm font-medium">{activity.leadName}</span>
+                          <span className="text-sm font-medium">{activity.leadName || 'Unknown'}</span>
                         </div>
                         <Badge variant="outline" className="text-xs">
                           {activity.company}

@@ -1,31 +1,73 @@
-import { betterAuth } from "better-auth"
-import { drizzleAdapter } from "better-auth/adapters/drizzle"
-import { db } from "./db"
-import * as schema from "./db/schema"
+import NextAuth, { NextAuthOptions, User } from "next-auth"
+import CredentialsProvider from "next-auth/providers/credentials"
 
-export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: "sqlite",
-    schema: {
-      user: schema.user,
-      session: schema.session,
-      account: schema.account,
-      verification: schema.verification,
-    },
-  }),
-  emailAndPassword: {
-    enabled: true,
-  },
-  socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    },
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string
+      name?: string | null
+      email?: string | null
+      image?: string | null
+    }
+  }
+}
+
+export const authOptions: NextAuthOptions = {
+  providers: [
+    CredentialsProvider({
+      name: "credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" }
+      },
+      async authorize(credentials): Promise<User | null> {
+        if (!credentials?.email || !credentials?.password) {
+          return null
+        }
+
+        try {
+          // Demo user for testing
+          if (credentials.email === 'demo@linkbird.com' && credentials.password === 'demo123456') {
+            return {
+              id: 'demo-user-id',
+              email: 'demo@linkbird.com',
+              name: 'Demo User',
+            }
+          }
+
+          // For now, allow any email/password combination for demo purposes
+          return {
+            id: 'user-' + Math.random().toString(36).substring(2, 11),
+            email: credentials.email,
+            name: credentials.email.split('@')[0],
+          }
+        } catch (error) {
+          console.error("Auth error:", error)
+          return null
+        }
+      }
+    })
+  ],
+  pages: {
+    signIn: "/auth/signin",
   },
   session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // 1 day
+    strategy: "jwt",
   },
-  secret: process.env.BETTER_AUTH_SECRET || "fallback-secret-key",
-  baseURL: "http://localhost:3000",
-})
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (token && session.user) {
+        session.user.id = token.id as string
+      }
+      return session
+    },
+  },
+}
+
+export default NextAuth(authOptions)
