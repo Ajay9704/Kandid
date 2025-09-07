@@ -51,7 +51,9 @@ async function fetchCampaigns(): Promise<Campaign[]> {
   if (!response.ok) {
     throw new Error('Failed to fetch campaigns')
   }
-  return response.json()
+  const data = await response.json()
+  // Handle different response formats
+  return Array.isArray(data) ? data : (data.data || [])
 }
 
 async function createCampaign(campaignData: Partial<Campaign>): Promise<Campaign> {

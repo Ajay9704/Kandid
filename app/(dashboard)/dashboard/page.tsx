@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from 'react'
@@ -50,79 +49,95 @@ interface DashboardStats {
 }
 
 async function fetchDashboardStats(): Promise<DashboardStats> {
-  const [leadsRes, campaignsRes] = await Promise.all([
-    fetch('/api/leads'),
-    fetch('/api/campaigns')
-  ])
+  try {
+    const [leadsRes, campaignsRes] = await Promise.all([
+      fetch('/api/leads'),
+      fetch('/api/campaigns')
+    ])
 
-  if (!leadsRes.ok || !campaignsRes.ok) {
-    throw new Error('Failed to fetch dashboard data')
-  }
-
-  const leads = await leadsRes.json()
-  const campaigns = await campaignsRes.json()
-
-  // Calculate stats
-  const totalLeads = leads.length
-  const totalCampaigns = campaigns.length
-  const activeLeads = leads.filter((lead: any) =>
-    ['contacted', 'responded', 'qualified'].includes(lead.status)
-  ).length
-
-  const responseRate = totalLeads > 0 ? (activeLeads / totalLeads) * 100 : 0
-
-  // Group leads by status
-  const statusCounts = leads.reduce((acc: any, lead: any) => {
-    acc[lead.status] = (acc[lead.status] || 0) + 1
-    return acc
-  }, {})
-
-  const leadsByStatus = Object.entries(statusCounts).map(([status, count]) => ({
-    status,
-    count: count as number,
-    percentage: totalLeads > 0 ? ((count as number) / totalLeads) * 100 : 0
-  }))
-
-  // Recent activity (mock for now)
-  const recentActivity = [
-    {
-      id: '1',
-      type: 'lead_created' as const,
-      message: 'New lead John Smith added to Q4 Campaign',
-      timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString()
-    },
-    {
-      id: '2',
-      type: 'lead_updated' as const,
-      message: 'Sarah Johnson status updated to Qualified',
-      timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString()
-    },
-    {
-      id: '3',
-      type: 'campaign_created' as const,
-      message: 'New campaign "Holiday Promotion" created',
-      timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    if (!leadsRes.ok || !campaignsRes.ok) {
+      throw new Error('Failed to fetch dashboard data')
     }
-  ]
 
-  return {
-    totalLeads,
-    totalCampaigns,
-    activeLeads,
-    responseRate,
-    recentActivity,
-    campaignPerformance: campaigns.map((campaign: any) => ({
-      id: campaign.id,
-      name: campaign.name,
-      leads: campaign.totalLeads,
-      responseRate: campaign.responseRate,
-      status: campaign.status
-    })),
-    leadsByStatus
+    const leadsData = await leadsRes.json()
+    const campaignsData = await campaignsRes.json()
+    
+    // Handle different response formats
+    const leads = Array.isArray(leadsData) ? leadsData : (leadsData.data || [])
+    const campaigns = Array.isArray(campaignsData) ? campaignsData : (campaignsData.data || [])
+
+    // Calculate stats
+    const totalLeads = leads.length
+    const totalCampaigns = campaigns.length
+    const activeLeads = leads.filter((lead: any) =>
+      ['contacted', 'responded', 'qualified'].includes(lead.status)
+    ).length
+
+    const responseRate = totalLeads > 0 ? (activeLeads / totalLeads) * 100 : 0
+
+    // Group leads by status
+    const statusCounts = leads.reduce((acc: any, lead: any) => {
+      acc[lead.status] = (acc[lead.status] || 0) + 1
+      return acc
+    }, {})
+
+    const leadsByStatus = Object.entries(statusCounts).map(([status, count]) => ({
+      status,
+      count: count as number,
+      percentage: totalLeads > 0 ? ((count as number) / totalLeads) * 100 : 0
+    }))
+
+    // Recent activity (mock for now)
+    const recentActivity = [
+      {
+        id: '1',
+        type: 'lead_created' as const,
+        message: 'New lead John Smith added to Q4 Campaign',
+        timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      },
+      {
+        id: '2',
+        type: 'lead_updated' as const,
+        message: 'Sarah Johnson status updated to Qualified',
+        timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString()
+      },
+      {
+        id: '3',
+        type: 'campaign_created' as const,
+        message: 'New campaign "Holiday Promotion" created',
+        timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString()
+      }
+    ]
+
+    return {
+      totalLeads,
+      totalCampaigns,
+      activeLeads,
+      responseRate,
+      recentActivity,
+      campaignPerformance: campaigns.map((campaign: any) => ({
+        id: campaign.id,
+        name: campaign.name,
+        leads: campaign.totalLeads || campaign.leads || 0,
+        responseRate: campaign.responseRate || 0,
+        status: campaign.status
+      })),
+      leadsByStatus
+    }
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error)
+    // Return fallback data
+    return {
+      totalLeads: 0,
+      totalCampaigns: 0,
+      activeLeads: 0,
+      responseRate: 0,
+      recentActivity: [],
+      campaignPerformance: [],
+      leadsByStatus: []
+    }
   }
 }
-
-
 
 export default function DashboardPage() {
   const { isConnected, toggleConnection, manuallyDisconnected } = useSocket()
@@ -163,8 +178,6 @@ export default function DashboardPage() {
     }
   }, [isConnected, liveViewEnabled, toast, refetch])
 
-  const currentStats = stats
-
   if (isLoading) {
     return (
       <div className="p-6 space-y-6">
@@ -194,11 +207,22 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-red-500">Error loading dashboard data</p>
+            <p className="text-red-500">Error loading dashboard data: {error.message}</p>
+            <Button onClick={() => refetch()} className="mt-2">Retry</Button>
           </div>
         </div>
       </div>
     )
+  }
+
+  const currentStats = stats || {
+    totalLeads: 0,
+    totalCampaigns: 0,
+    activeLeads: 0,
+    responseRate: 0,
+    recentActivity: [],
+    campaignPerformance: [],
+    leadsByStatus: []
   }
 
   return (
@@ -264,7 +288,7 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground group-hover:text-blue-600 transition-colors" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold group-hover:text-blue-600 transition-colors">{currentStats?.totalLeads || 12}</div>
+            <div className="text-2xl font-bold group-hover:text-blue-600 transition-colors">{currentStats.totalLeads || 12}</div>
             <p className="text-xs text-muted-foreground">
               <span className="text-green-600">+12%</span> from last month
             </p>
@@ -278,7 +302,7 @@ export default function DashboardPage() {
             <Target className="h-4 w-4 text-muted-foreground group-hover:text-green-600 transition-colors" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold group-hover:text-green-600 transition-colors">{currentStats?.totalCampaigns || 19}</div>
+            <div className="text-2xl font-bold group-hover:text-green-600 transition-colors">{currentStats.totalCampaigns || 19}</div>
             <p className="text-xs text-muted-foreground">
               <span className="text-green-600">+2</span> new this week
             </p>
@@ -292,7 +316,7 @@ export default function DashboardPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground group-hover:text-yellow-600 transition-colors" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold group-hover:text-yellow-600 transition-colors">{currentStats?.responseRate?.toFixed(1) || '66.7'}%</div>
+            <div className="text-2xl font-bold group-hover:text-yellow-600 transition-colors">{currentStats.responseRate ? currentStats.responseRate.toFixed(1) : '66.7'}%</div>
             <p className="text-xs text-muted-foreground">
               <span className="text-green-600">+5.2%</span> from last week
             </p>
@@ -306,7 +330,7 @@ export default function DashboardPage() {
             <Zap className="h-4 w-4 text-muted-foreground group-hover:text-purple-600 transition-colors" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold group-hover:text-purple-600 transition-colors">{currentStats?.activeLeads || 8}</div>
+            <div className="text-2xl font-bold group-hover:text-purple-600 transition-colors">{currentStats.activeLeads || 8}</div>
             <p className="text-xs text-muted-foreground">
               <span className="text-green-600">+8</span> this week
             </p>
@@ -428,51 +452,23 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors" onClick={(e) => {
-              e.stopPropagation()
-              router.push('/campaigns/1')
-            }}>
-              <div>
-                <p className="font-medium text-sm">Q4 Outreach Campaign</p>
-                <p className="text-xs text-muted-foreground">
-                  45 leads • 68.2% response rate
-                </p>
+            {currentStats.campaignPerformance.slice(0, 3).map((campaign, index) => (
+              <div key={campaign.id || index} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors" onClick={(e) => {
+                e.stopPropagation()
+                router.push(`/campaigns/${campaign.id}`)
+              }}>
+                <div>
+                  <p className="font-medium text-sm">{campaign.name || `Campaign ${index + 1}`}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {campaign.leads || 0} leads • {campaign.responseRate || 0}% response rate
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Badge className="bg-green-100 text-green-800">Running</Badge>
+                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <Badge className="bg-green-100 text-green-800">Running</Badge>
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors" onClick={(e) => {
-              e.stopPropagation()
-              router.push('/campaigns/2')
-            }}>
-              <div>
-                <p className="font-medium text-sm">Tech Executive Outreach</p>
-                <p className="text-xs text-muted-foreground">
-                  28 leads • 71.4% response rate
-                </p>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Badge className="bg-blue-100 text-blue-800">Scheduled</Badge>
-                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-yellow-50 dark:hover:bg-yellow-950/30 transition-colors" onClick={(e) => {
-              e.stopPropagation()
-              router.push('/campaigns/3')
-            }}>
-              <div>
-                <p className="font-medium text-sm">Holiday Promotion</p>
-                <p className="text-xs text-muted-foreground">
-                  12 leads • 58.3% response rate
-                </p>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Badge className="bg-yellow-100 text-yellow-800">Paused</Badge>
-                <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-              </div>
-            </div>
+            ))}
             <div className="text-center pt-2">
               <Button variant="outline" size="sm" className="group-hover:border-purple-300 group-hover:text-purple-600 transition-colors" onClick={(e) => {
                 e.stopPropagation()
@@ -498,20 +494,24 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {currentStats?.recentActivity.map((activity) => (
-              <div key={activity.id} className="flex items-start space-x-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                <div className="w-2 h-2 rounded-full bg-blue-500 mt-2"></div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{activity.message}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(activity.timestamp).toLocaleString()}
-                  </p>
+            {currentStats.recentActivity.length > 0 ? (
+              currentStats.recentActivity.map((activity) => (
+                <div key={activity.id} className="flex items-start space-x-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 mt-2"></div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{activity.message}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(activity.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {activity.type.replace('_', ' ')}
+                  </Badge>
                 </div>
-                <Badge variant="outline" className="text-xs">
-                  {activity.type.replace('_', ' ')}
-                </Badge>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-muted-foreground text-center py-4">No recent activity</p>
+            )}
           </div>
         </CardContent>
       </Card>

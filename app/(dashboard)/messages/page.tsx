@@ -18,9 +18,11 @@ export default function MessagesPage() {
       const response = await fetch('/api/messages')
       if (!response.ok) throw new Error('Failed to fetch messages')
       const data = await response.json()
+      // Handle different response formats
+      const messages = Array.isArray(data) ? data : (data.data || [])
       
       // Add mock data for demo if no real data
-      if (data.length === 0) {
+      if (messages.length === 0) {
         return [
           {
             id: '1',
@@ -54,7 +56,7 @@ export default function MessagesPage() {
         ]
       }
       
-      return data
+      return messages
     },
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
   })

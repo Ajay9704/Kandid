@@ -1,22 +1,44 @@
-import { auth } from '../lib/auth'
+import { authOptions } from '../lib/auth'
+import CredentialsProvider from "next-auth/providers/credentials"
 
 async function testAuth() {
   console.log('🧪 Testing authentication system...')
   
   try {
-    // Test sign in with demo user
-    const signInResult = await auth.api.signInEmail({
-      body: {
-        email: 'demo@linkbird.com',
-        password: 'demo123456'
-      }
+    // Test credential validation with demo user
+    const credentialsProvider = authOptions.providers?.find(
+      (provider) => provider.id === 'credentials'
+    ) as any
+    
+    if (!credentialsProvider) {
+      console.error('❌ Credentials provider not found')
+      return
+    }
+
+    const result = await credentialsProvider.authorize({
+      email: 'demo@linkbird.com',
+      password: 'demo123456'
     })
 
-    if (signInResult.error) {
-      console.error('❌ Sign in failed:', signInResult.error)
+    if (result) {
+      console.log('✅ Authentication validation successful!')
+      console.log('User:', result.name)
+      console.log('Email:', result.email)
+      console.log('ID:', result.id)
     } else {
-      console.log('✅ Sign in successful!')
-      console.log('User:', signInResult.data?.user?.name)
+      console.error('❌ Authentication validation failed')
+    }
+
+    // Test with invalid credentials
+    const invalidResult = await credentialsProvider.authorize({
+      email: 'invalid@example.com',
+      password: 'wrongpassword'
+    })
+
+    if (invalidResult) {
+      console.log('⚠️ Invalid credentials were accepted (demo mode)')
+    } else {
+      console.log('✅ Invalid credentials properly rejected')
     }
 
   } catch (error) {

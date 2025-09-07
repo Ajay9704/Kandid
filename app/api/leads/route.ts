@@ -3,12 +3,13 @@ import { db } from "@/lib/db/index"
 import { leads, campaigns } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { nanoid } from "nanoid"
+import { getMockLeads, addMockLead, type MockLead } from "@/lib/mock-leads-store"
 
 export async function GET(request: NextRequest) {
   try {
     // Try to fetch from database first
     try {
-      const allLeads = await db.select({
+      const dbLeads = await db.select({
         id: leads.id,
         name: leads.name,
         email: leads.email,
@@ -30,76 +31,34 @@ export async function GET(request: NextRequest) {
         updatedAt: leads.updatedAt,
       }).from(leads)
 
+      // Map database fields back to expected format
+      const allLeads = dbLeads.map(lead => ({
+        id: lead.id,
+        name: lead.name,
+        email: lead.email,
+        company: lead.company,
+        position: lead.position,
+        linkedinUrl: lead.linkedinUrl,
+        profileImage: lead.profileImage,
+        location: lead.location,
+        status: lead.status,
+        connectionStatus: lead.connectionStatus,
+        sequenceStep: lead.sequenceStep,
+        lastContactDate: lead.lastContactDate,
+        lastActivity: lead.lastActivity,
+        lastActivityDate: lead.lastActivityDate,
+        notes: lead.notes,
+        campaignId: lead.campaignId,
+        userId: lead.userId,
+        createdAt: lead.createdAt,
+        updatedAt: lead.updatedAt,
+      }))
+
       return NextResponse.json(allLeads)
     } catch (dbError) {
       console.log("Database not ready, returning mock data")
-      // Return mock data if database is not ready
-      const mockLeads = [
-        {
-          id: "1",
-          name: "Sarah Johnson",
-          email: "sarah.johnson@techcorp.com",
-          company: "TechCorp",
-          position: "VP of Engineering",
-          linkedinUrl: "https://linkedin.com/in/sarahjohnson",
-          profileImage: null,
-          location: "San Francisco, CA",
-          status: "responded",
-          connectionStatus: "connected",
-          sequenceStep: 2,
-          lastContactDate: new Date("2024-01-18"),
-          lastActivity: "Replied to follow-up message",
-          lastActivityDate: new Date("2024-01-18"),
-          notes: "Very interested in our solution",
-          campaignId: "1",
-          userId: "demo-user",
-          createdAt: new Date("2024-01-15"),
-          updatedAt: new Date("2024-01-18"),
-        },
-        {
-          id: "2",
-          name: "Mike Chen",
-          email: "mike.chen@startupxyz.com",
-          company: "StartupXYZ",
-          position: "CTO",
-          linkedinUrl: "https://linkedin.com/in/mikechen",
-          profileImage: null,
-          location: "New York, NY",
-          status: "contacted",
-          connectionStatus: "request_sent",
-          sequenceStep: 1,
-          lastContactDate: new Date("2024-01-17"),
-          lastActivity: "Connection request sent",
-          lastActivityDate: new Date("2024-01-17"),
-          notes: "Potential early adopter",
-          campaignId: "1",
-          userId: "demo-user",
-          createdAt: new Date("2024-01-16"),
-          updatedAt: new Date("2024-01-17"),
-        },
-        {
-          id: "3",
-          name: "Lisa Wang",
-          email: "lisa.wang@innovationlabs.com",
-          company: "Innovation Labs",
-          position: "Head of Product",
-          linkedinUrl: "https://linkedin.com/in/lisawang",
-          profileImage: null,
-          location: "Austin, TX",
-          status: "qualified",
-          connectionStatus: "connected",
-          sequenceStep: 3,
-          lastContactDate: new Date("2024-01-19"),
-          lastActivity: "Scheduled demo call",
-          lastActivityDate: new Date("2024-01-19"),
-          notes: "Ready for demo, very engaged",
-          campaignId: "2",
-          userId: "demo-user",
-          createdAt: new Date("2024-01-14"),
-          updatedAt: new Date("2024-01-19"),
-        }
-      ]
-      return NextResponse.json(mockLeads)
+      // Return mock data from shared store
+      return NextResponse.json(getMockLeads())
     }
   } catch (error) {
     console.error("Error fetching leads:", error)
@@ -116,13 +75,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name and email are required" }, { status: 400 })
     }
 
-    // Create new lead with mock data for now
-    const newLead = {
+    // Create new lead
+    const newLead: MockLead = {
       id: nanoid(),
       name,
       email,
-      company: company || "Unknown Company",
-      position: position || "Unknown Position",
+      company: company || null,
+      position: position || null,
       linkedinUrl: null,
       profileImage: null,
       location: null,
@@ -132,19 +91,21 @@ export async function POST(request: NextRequest) {
       lastContactDate: null,
       lastActivity: "Lead created",
       lastActivityDate: new Date(),
-      notes: notes || "",
-      campaignId: campaignId || "1",
-      userId: "demo-user",
+      notes: notes || null,
+      campaignId: campaignId || "campaign-1", // Use valid campaign ID from database
+      userId: "demo-user-id",
       createdAt: new Date(),
       updatedAt: new Date(),
     }
 
-    // Try to insert into database, fallback to returning mock data
+    // Try to insert into database, fallback to mock store
     try {
       const dbResult = await db.insert(leads).values(newLead).returning()
       return NextResponse.json(dbResult[0])
     } catch (dbError) {
-      console.log("Database not ready, returning mock lead")
+      console.log("Database not ready, adding to mock store")
+      // Add to shared mock store
+      addMockLead(newLead)
       return NextResponse.json(newLead)
     }
   } catch (error) {

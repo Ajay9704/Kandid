@@ -29,9 +29,11 @@ export default function ActivityPage() {
       const response = await fetch('/api/activity')
       if (!response.ok) throw new Error('Failed to fetch activities')
       const data = await response.json()
+      // Handle different response formats
+      const activities = Array.isArray(data) ? data : (data.data || [])
 
       // Add mock data for demo if no real data
-      if (data.length === 0) {
+      if (activities.length === 0) {
         return [
           {
             id: '1',
@@ -81,7 +83,7 @@ export default function ActivityPage() {
         ]
       }
 
-      return data.map((activity: any) => ({
+      return activities.map((activity: any) => ({
         ...activity,
         icon: activity.activityType === 'connection_request_sent' ? UserPlus :
           activity.activityType === 'profile_viewed' ? Eye :

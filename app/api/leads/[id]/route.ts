@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db/index"
 import { leads } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
+import { getMockLeadById, updateMockLead, type MockLead } from "@/lib/mock-leads-store"
 
 export async function GET(
   request: NextRequest,
@@ -21,79 +22,13 @@ export async function GET(
       console.log("Database not ready, returning mock data")
     }
 
-    // Return mock data based on ID
-    const mockLeads: { [key: string]: any } = {
-      "1": {
-        id: "1",
-        name: "Sarah Johnson",
-        email: "sarah.johnson@techcorp.com",
-        company: "TechCorp",
-        position: "VP of Engineering",
-        linkedinUrl: "https://linkedin.com/in/sarahjohnson",
-        profileImage: null,
-        location: "San Francisco, CA",
-        status: "responded",
-        connectionStatus: "connected",
-        sequenceStep: 2,
-        lastContactDate: new Date("2024-01-18"),
-        lastActivity: "Replied to follow-up message",
-        lastActivityDate: new Date("2024-01-18"),
-        notes: "Very interested in our solution",
-        campaignId: "1",
-        userId: "demo-user",
-        createdAt: new Date("2024-01-15"),
-        updatedAt: new Date("2024-01-18"),
-      },
-      "2": {
-        id: "2",
-        name: "Mike Chen",
-        email: "mike.chen@startupxyz.com",
-        company: "StartupXYZ",
-        position: "CTO",
-        linkedinUrl: "https://linkedin.com/in/mikechen",
-        profileImage: null,
-        location: "New York, NY",
-        status: "contacted",
-        connectionStatus: "request_sent",
-        sequenceStep: 1,
-        lastContactDate: new Date("2024-01-17"),
-        lastActivity: "Connection request sent",
-        lastActivityDate: new Date("2024-01-17"),
-        notes: "Potential early adopter",
-        campaignId: "1",
-        userId: "demo-user",
-        createdAt: new Date("2024-01-16"),
-        updatedAt: new Date("2024-01-17"),
-      },
-      "3": {
-        id: "3",
-        name: "Lisa Wang",
-        email: "lisa.wang@innovationlabs.com",
-        company: "Innovation Labs",
-        position: "Head of Product",
-        linkedinUrl: "https://linkedin.com/in/lisawang",
-        profileImage: null,
-        location: "Austin, TX",
-        status: "qualified",
-        connectionStatus: "connected",
-        sequenceStep: 3,
-        lastContactDate: new Date("2024-01-19"),
-        lastActivity: "Scheduled demo call",
-        lastActivityDate: new Date("2024-01-19"),
-        notes: "Ready for demo, very engaged",
-        campaignId: "2",
-        userId: "demo-user",
-        createdAt: new Date("2024-01-14"),
-        updatedAt: new Date("2024-01-19"),
-      }
-    }
-
-    const lead = mockLeads[leadId]
-    if (!lead) {
+    // Return mock data from shared store
+    const mockLead = getMockLeadById(leadId)
+    if (!mockLead) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 })
     }
 
-    return NextResponse.json(lead)
+    return NextResponse.json(mockLead)
   } catch (error) {
     console.error("Error fetching lead:", error)
     return NextResponse.json({ error: "Failed to fetch lead" }, { status: 500 })
@@ -137,16 +72,28 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json()
-    const { status } = body
+    const { status, connectionStatus } = body
     const leadId = params.id
+
+    // Prepare update data
+    const updateData: any = {
+      updatedAt: new Date(),
+    }
+    
+    // Add status if provided
+    if (status !== undefined) {
+      updateData.status = status
+    }
+    
+    // Add connectionStatus if provided
+    if (connectionStatus !== undefined) {
+      updateData.connectionStatus = connectionStatus
+    }
 
     // Try to update in database first
     try {
       const updatedLead = await db.update(leads)
-        .set({
-          status,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(eq(leads.id, leadId))
         .returning()
 
@@ -154,26 +101,18 @@ export async function PATCH(
         return NextResponse.json(updatedLead[0])
       }
     } catch (dbError) {
-      console.log("Database not ready, returning mock update")
+      console.log("Database not ready, updating mock data")
     }
 
-    // Return mock updated data
-    const updatedLead = {
-      id: leadId,
-      name: "Mock Lead",
-      email: "mock@example.com",
-      company: "Mock Company",
-      position: "Mock Position",
-      status,
-      connectionStatus: "connected",
-      sequenceStep: 2,
+    // Try to update in mock store
+    const updatedLead = updateMockLead(leadId, {
+      ...updateData,
       lastActivity: "Status updated",
       lastActivityDate: new Date(),
-      notes: "Status updated via API",
-      campaignId: "1",
-      userId: "demo-user",
-      createdAt: new Date("2024-01-15"),
-      updatedAt: new Date(),
+    })
+
+    if (!updatedLead) {
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 })
     }
 
     return NextResponse.json(updatedLead)

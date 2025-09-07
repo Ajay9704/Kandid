@@ -86,89 +86,131 @@ async function fetchAnalytics(): Promise<AnalyticsData> {
     const leads = Array.isArray(leadsData) ? leadsData : (leadsData.data || [])
     const campaigns = Array.isArray(campaignsData) ? campaignsData : (campaignsData.data || [])
 
-  // Calculate analytics
-  const totalLeads = leads.length
-  const totalCampaigns = campaigns.length
-  const connectedLeads = leads.filter((lead: any) => lead.connectionStatus === 'connected').length
-  const respondedLeads = leads.filter((lead: any) => lead.status === 'responded').length
-  const convertedLeads = leads.filter((lead: any) => lead.status === 'converted').length
+    // Calculate analytics
+    const totalLeads = leads.length
+    const totalCampaigns = campaigns.length
+    const connectedLeads = leads.filter((lead: any) => lead.connectionStatus === 'connected').length
+    const respondedLeads = leads.filter((lead: any) => lead.status === 'responded').length
+    const convertedLeads = leads.filter((lead: any) => lead.status === 'converted').length
 
-  const connectionRate = totalLeads > 0 ? (connectedLeads / totalLeads) * 100 : 0
-  const responseRate = connectedLeads > 0 ? (respondedLeads / connectedLeads) * 100 : 0
-  const conversionRate = respondedLeads > 0 ? (convertedLeads / respondedLeads) * 100 : 0
+    const connectionRate = totalLeads > 0 ? (connectedLeads / totalLeads) * 100 : 0
+    const responseRate = connectedLeads > 0 ? (respondedLeads / connectedLeads) * 100 : 0
+    const conversionRate = respondedLeads > 0 ? (convertedLeads / respondedLeads) * 100 : 0
 
-  // Mock trend data
-  const trends = {
-    leadsThisWeek: Math.floor(totalLeads * 0.3),
-    leadsLastWeek: Math.floor(totalLeads * 0.25),
-    connectionsThisWeek: Math.floor(connectedLeads * 0.4),
-    connectionsLastWeek: Math.floor(connectedLeads * 0.35),
-    responsesThisWeek: Math.floor(respondedLeads * 0.5),
-    responsesLastWeek: Math.floor(respondedLeads * 0.4),
-  }
+    // Mock trend data
+    const trends = {
+      leadsThisWeek: Math.floor(totalLeads * 0.3),
+      leadsLastWeek: Math.floor(totalLeads * 0.25),
+      connectionsThisWeek: Math.floor(connectedLeads * 0.4),
+      connectionsLastWeek: Math.floor(connectedLeads * 0.35),
+      responsesThisWeek: Math.floor(respondedLeads * 0.5),
+      responsesLastWeek: Math.floor(respondedLeads * 0.4),
+    }
 
-  // Group leads by status
-  const statusCounts = leads.reduce((acc: any, lead: any) => {
-    acc[lead.status] = (acc[lead.status] || 0) + 1
-    return acc
-  }, {})
+    // Group leads by status
+    const statusCounts = leads.reduce((acc: any, lead: any) => {
+      acc[lead.status] = (acc[lead.status] || 0) + 1
+      return acc
+    }, {})
 
-  const leadsByStatus = Object.entries(statusCounts).map(([status, count]) => ({
-    status,
-    count: count as number,
-    percentage: totalLeads > 0 ? ((count as number) / totalLeads) * 100 : 0
-  }))
+    const leadsByStatus = Object.entries(statusCounts).map(([status, count]) => ({
+      status,
+      count: count as number,
+      percentage: totalLeads > 0 ? ((count as number) / totalLeads) * 100 : 0
+    }))
 
-  // Group leads by connection status
-  const connectionCounts = leads.reduce((acc: any, lead: any) => {
-    acc[lead.connectionStatus || 'not_connected'] = (acc[lead.connectionStatus || 'not_connected'] || 0) + 1
-    return acc
-  }, {})
+    // Group leads by connection status
+    const connectionCounts = leads.reduce((acc: any, lead: any) => {
+      acc[lead.connectionStatus || 'not_connected'] = (acc[lead.connectionStatus || 'not_connected'] || 0) + 1
+      return acc
+    }, {})
 
-  const connectionsByStatus = Object.entries(connectionCounts).map(([status, count]) => ({
-    status,
-    count: count as number,
-    percentage: totalLeads > 0 ? ((count as number) / totalLeads) * 100 : 0
-  }))
+    const connectionsByStatus = Object.entries(connectionCounts).map(([status, count]) => ({
+      status,
+      count: count as number,
+      percentage: totalLeads > 0 ? ((count as number) / totalLeads) * 100 : 0
+    }))
 
-  return {
-    overview: {
-      totalLeads,
-      totalCampaigns,
-      connectionRate,
-      responseRate,
-      conversionRate,
-      avgResponseTime: 2.4 // hours
-    },
-    trends,
-    campaignPerformance: campaigns.map((campaign: any) => ({
-      id: campaign.id,
-      name: campaign.name,
-      leads: campaign.totalLeads || Math.floor(Math.random() * 50) + 10,
-      connections: Math.floor(Math.random() * 30) + 5,
-      responses: Math.floor(Math.random() * 20) + 2,
-      connectionRate: Math.floor(Math.random() * 40) + 40,
-      responseRate: Math.floor(Math.random() * 30) + 50,
-      status: campaign.status
-    })),
-    leadsByStatus,
-    connectionsByStatus,
-    timeAnalysis: {
-      bestDaysToConnect: [
-        { day: 'Tuesday', rate: 78 },
-        { day: 'Wednesday', rate: 75 },
-        { day: 'Thursday', rate: 72 },
-        { day: 'Monday', rate: 68 },
-        { day: 'Friday', rate: 65 }
-      ],
-      bestTimesToConnect: [
-        { hour: '9-10 AM', rate: 82 },
-        { hour: '10-11 AM', rate: 79 },
-        { hour: '2-3 PM', rate: 76 },
-        { hour: '3-4 PM', rate: 73 },
-        { hour: '11-12 PM', rate: 70 }
-      ],
-      avgTimeToResponse: 2.4
+    return {
+      overview: {
+        totalLeads,
+        totalCampaigns,
+        connectionRate,
+        responseRate,
+        conversionRate,
+        avgResponseTime: 2.4 // hours
+      },
+      trends,
+      campaignPerformance: campaigns.map((campaign: any) => ({
+        id: campaign.id,
+        name: campaign.name,
+        leads: campaign.totalLeads || Math.floor(Math.random() * 50) + 10,
+        connections: Math.floor(Math.random() * 30) + 5,
+        responses: Math.floor(Math.random() * 20) + 2,
+        connectionRate: Math.floor(Math.random() * 40) + 40,
+        responseRate: Math.floor(Math.random() * 30) + 50,
+        status: campaign.status
+      })),
+      leadsByStatus,
+      connectionsByStatus,
+      timeAnalysis: {
+        bestDaysToConnect: [
+          { day: 'Tuesday', rate: 78 },
+          { day: 'Wednesday', rate: 75 },
+          { day: 'Thursday', rate: 72 },
+          { day: 'Monday', rate: 68 },
+          { day: 'Friday', rate: 65 }
+        ],
+        bestTimesToConnect: [
+          { hour: '9-10 AM', rate: 82 },
+          { hour: '10-11 AM', rate: 79 },
+          { hour: '2-3 PM', rate: 76 },
+          { hour: '3-4 PM', rate: 73 },
+          { hour: '11-12 PM', rate: 70 }
+        ],
+        avgTimeToResponse: 2.4
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching analytics:', error)
+    // Return fallback data if API calls fail
+    return {
+      overview: {
+        totalLeads: 0,
+        totalCampaigns: 0,
+        connectionRate: 0,
+        responseRate: 0,
+        conversionRate: 0,
+        avgResponseTime: 0
+      },
+      trends: {
+        leadsThisWeek: 0,
+        leadsLastWeek: 0,
+        connectionsThisWeek: 0,
+        connectionsLastWeek: 0,
+        responsesThisWeek: 0,
+        responsesLastWeek: 0,
+      },
+      campaignPerformance: [],
+      leadsByStatus: [],
+      connectionsByStatus: [],
+      timeAnalysis: {
+        bestDaysToConnect: [
+          { day: 'Tuesday', rate: 78 },
+          { day: 'Wednesday', rate: 75 },
+          { day: 'Thursday', rate: 72 },
+          { day: 'Monday', rate: 68 },
+          { day: 'Friday', rate: 65 }
+        ],
+        bestTimesToConnect: [
+          { hour: '9-10 AM', rate: 82 },
+          { hour: '10-11 AM', rate: 79 },
+          { hour: '2-3 PM', rate: 76 },
+          { hour: '3-4 PM', rate: 73 },
+          { hour: '11-12 PM', rate: 70 }
+        ],
+        avgTimeToResponse: 2.4
+      }
     }
   }
 }

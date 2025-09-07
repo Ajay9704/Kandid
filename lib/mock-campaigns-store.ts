@@ -17,7 +17,7 @@ export interface MockCampaign {
 // In-memory store for mock campaigns
 let mockCampaignsStore: MockCampaign[] = [
   {
-    id: "1",
+    id: "campaign-1",
     name: "Q4 Outreach Campaign",
     status: "active",
     description: "End of year outreach to potential clients",
@@ -29,7 +29,7 @@ let mockCampaignsStore: MockCampaign[] = [
     updatedAt: new Date("2024-01-20"),
   },
   {
-    id: "2", 
+    id: "campaign-2", 
     name: "Tech Executive Outreach",
     status: "active",
     description: "Targeting CTOs and VPs in tech companies",
@@ -41,7 +41,7 @@ let mockCampaignsStore: MockCampaign[] = [
     updatedAt: new Date("2024-01-18"),
   },
   {
-    id: "3",
+    id: "campaign-3",
     name: "Holiday Promotion",
     status: "paused",
     description: "Special holiday offers for prospects",
