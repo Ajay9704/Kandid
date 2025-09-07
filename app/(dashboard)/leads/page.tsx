@@ -152,6 +152,7 @@ export default function LeadsPage() {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
       setSelectedLead(updatedLead)
+      setPendingStatusChange(null)
       toast({
         title: "Status updated",
         description: `Lead status changed to ${updatedLead.status}.`,
@@ -159,13 +160,14 @@ export default function LeadsPage() {
     },
     onError: (error: any) => {
       console.error('Status update error:', error)
+      setPendingStatusChange(null)
       toast({
         title: "Update failed",
         description: error?.message || "Failed to update lead status. Please try again.",
         variant: "destructive",
       })
     },
-    retry: 2, // Retry failed requests twice
+    retry: 1, // Retry failed requests once
   })
 
   const filteredLeads = leads.filter(lead => {
@@ -181,6 +183,11 @@ export default function LeadsPage() {
     if (newLead.name && newLead.email) {
       createLeadMutation.mutate(newLead)
     }
+  }
+
+  const handleStatusChange = (leadId: string, newStatus: string) => {
+    setPendingStatusChange(leadId)
+    updateStatusMutation.mutate({ leadId, status: newStatus })
   }
 
   if (isLoading) {
