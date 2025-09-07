@@ -4,12 +4,13 @@ import { leads } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getMockLeadById, updateMockLead, type MockLead } from "@/lib/mock-leads-store"
 
+// Fix the route signature to match Next.js 15 expectations
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const leadId = params.id
+    const { id: leadId } = await context.params
 
     // Try to fetch from database first
     try {
@@ -37,9 +38,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: leadId } = await context.params
     const body = await request.json()
     const { name, email, company, status, notes } = body
 
@@ -52,7 +54,7 @@ export async function PUT(
         notes,
         updatedAt: new Date(),
       })
-      .where(eq(leads.id, params.id))
+      .where(eq(leads.id, leadId))
       .returning()
 
     if (updatedLead.length === 0) {
@@ -68,12 +70,12 @@ export async function PUT(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: leadId } = await context.params
     const body = await request.json()
     const { status, connectionStatus } = body
-    const leadId = params.id
 
     // Prepare update data
     const updateData: any = {
@@ -124,10 +126,11 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const deletedLead = await db.delete(leads).where(eq(leads.id, params.id)).returning()
+    const { id: leadId } = await context.params
+    const deletedLead = await db.delete(leads).where(eq(leads.id, leadId)).returning()
     
     if (deletedLead.length === 0) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 })

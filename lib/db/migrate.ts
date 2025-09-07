@@ -1,7 +1,7 @@
 import { db } from './index'
 import { sql } from 'drizzle-orm'
 
-async function createTables() {
+export async function runMigrations() {
   try {
     console.log('🚀 Creating tables...')
     
@@ -26,4 +26,7 @@ async function createTables() {
   }
 }
 
-createTables()
+// Only run migrations if this file is executed directly
+if (require.main === module) {
+  runMigrations()
+}

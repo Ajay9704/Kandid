@@ -3,12 +3,13 @@ import { db } from "@/lib/db/index"
 import { campaigns } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 
+// Fix the route signature to match Next.js 15 expectations
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const campaignId = params.id
+    const { id: campaignId } = await context.params
 
     // Try to fetch from database first
     try {
@@ -72,10 +73,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const campaignId = params.id
+    const { id: campaignId } = await context.params
     const body = await request.json()
     const { name, description, status } = body
 
@@ -121,10 +122,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const campaignId = params.id
+    const { id: campaignId } = await context.params
 
     // Try to delete from database first
     try {
