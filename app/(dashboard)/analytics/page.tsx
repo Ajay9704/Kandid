@@ -67,18 +67,24 @@ interface AnalyticsData {
 }
 
 async function fetchAnalytics(): Promise<AnalyticsData> {
-  // Simulate API call - in real app, this would fetch from your analytics endpoint
-  const [leadsRes, campaignsRes] = await Promise.all([
-    fetch('/api/leads'),
-    fetch('/api/campaigns')
-  ])
+  try {
+    // Fetch data from APIs with proper error handling
+    const [leadsRes, campaignsRes] = await Promise.all([
+      fetch('/api/leads'),
+      fetch('/api/campaigns')
+    ])
 
-  if (!leadsRes.ok || !campaignsRes.ok) {
-    throw new Error('Failed to fetch analytics data')
-  }
+    if (!leadsRes.ok || !campaignsRes.ok) {
+      console.error('API responses not OK:', { leadsOk: leadsRes.ok, campaignsOk: campaignsRes.ok })
+      throw new Error('Failed to fetch analytics data')
+    }
 
-  const leads = await leadsRes.json()
-  const campaigns = await campaignsRes.json()
+    const leadsData = await leadsRes.json()
+    const campaignsData = await campaignsRes.json()
+    
+    // Handle different response formats
+    const leads = Array.isArray(leadsData) ? leadsData : (leadsData.data || [])
+    const campaigns = Array.isArray(campaignsData) ? campaignsData : (campaignsData.data || [])
 
   // Calculate analytics
   const totalLeads = leads.length
