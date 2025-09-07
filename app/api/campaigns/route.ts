@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db/index"
+import { NextRequest, NextResponse } from "next/server"
+import { db, checkDatabaseConnection } from "@/lib/db/index"
 import { campaigns, leads } from "@/lib/db/schema"
-import { eq, count } from "drizzle-orm"
+import { eq, count, and, sql, desc } from "drizzle-orm"
 import { nanoid } from "nanoid"
+import { z } from "zod"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { getMockCampaigns, addMockCampaign, findMockCampaignByName, type MockCampaign } from "@/lib/mock-campaigns-store"
 
 export async function GET(request: NextRequest) {
   try {
