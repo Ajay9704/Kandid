@@ -51,8 +51,12 @@ async function fetchQuickStats() {
       throw new Error('Failed to fetch stats')
     }
     
-    const leads = await leadsRes.json()
-    const campaigns = await campaignsRes.json()
+    const leadsData = await leadsRes.json()
+    const campaignsData = await campaignsRes.json()
+    
+    // Handle different response formats
+    const leads = Array.isArray(leadsData) ? leadsData : (leadsData.data || [])
+    const campaigns = Array.isArray(campaignsData) ? campaignsData : (campaignsData.data || [])
     
     return {
       totalLeads: leads.length,
@@ -270,11 +274,8 @@ export function Sidebar() {
               onClick={async () => {
                 try {
                   await signOut({
-                    fetchOptions: {
-                      onSuccess: () => {
-                        window.location.href = '/auth/signin'
-                      }
-                    }
+                    redirect: true,
+                    callbackUrl: '/auth/signin'
                   })
                 } catch (error) {
                   console.error('Sign out error:', error)

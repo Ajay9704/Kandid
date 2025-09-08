@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from 'react'
 
+const SOCKET_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+const SOCKET_PATH = '/api/socket'
+const RECONNECT_ATTEMPTS = 1
+const RECONNECT_DELAY = 10000
+const PING_INTERVAL = 120000 // 2 minutes
+
 export const useSocket = () => {
   const [isConnected, setIsConnected] = useState(true)
   const [manuallyDisconnected, setManuallyDisconnected] = useState(false)

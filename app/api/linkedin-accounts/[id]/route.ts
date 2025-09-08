@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const accountId = params.id
+    const { id: accountId } = await context.params
 
     // Mock LinkedIn account data
     const mockAccount = {
@@ -44,11 +44,11 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: accountId } = await context.params
     const body = await request.json()
-    const accountId = params.id
 
     // Mock update - in real app, this would update the database
     const updatedAccount = {

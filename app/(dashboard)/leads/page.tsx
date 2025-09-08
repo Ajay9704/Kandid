@@ -71,7 +71,9 @@ async function fetchLeads(): Promise<Lead[]> {
   if (!response.ok) {
     throw new Error('Failed to fetch leads')
   }
-  return response.json()
+  const data = await response.json()
+  // Handle different response formats
+  return Array.isArray(data) ? data : (data.data || [])
 }
 
 async function createLead(leadData: Partial<Lead>): Promise<Lead> {
@@ -88,13 +90,13 @@ async function createLead(leadData: Partial<Lead>): Promise<Lead> {
   return response.json()
 }
 
-async function updateLeadStatus(leadId: string, status: string): Promise<Lead> {
+async function updateLeadStatus(leadId: string, statusData: { status?: string; connectionStatus?: string }): Promise<Lead> {
   const response = await fetch(`/api/leads/${leadId}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(statusData),
   })
   if (!response.ok) {
     throw new Error('Failed to update lead status')
@@ -146,12 +148,13 @@ export default function LeadsPage() {
   })
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({ leadId, status }: { leadId: string; status: string }) =>
-      updateLeadStatus(leadId, status),
+    mutationFn: ({ leadId, status, connectionStatus }: { leadId: string; status?: string; connectionStatus?: string }) =>
+      updateLeadStatus(leadId, { status, connectionStatus }),
     onSuccess: (updatedLead) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
       setSelectedLead(updatedLead)
+      setPendingStatusChange(null)
       toast({
         title: "Status updated",
         description: `Lead status changed to ${updatedLead.status}.`,
@@ -159,13 +162,14 @@ export default function LeadsPage() {
     },
     onError: (error: any) => {
       console.error('Status update error:', error)
+      setPendingStatusChange(null)
       toast({
         title: "Update failed",
         description: error?.message || "Failed to update lead status. Please try again.",
         variant: "destructive",
       })
     },
-    retry: 2, // Retry failed requests twice
+    retry: 1, // Retry failed requests once
   })
 
   const filteredLeads = leads.filter(lead => {
@@ -181,6 +185,11 @@ export default function LeadsPage() {
     if (newLead.name && newLead.email) {
       createLeadMutation.mutate(newLead)
     }
+  }
+
+  const handleStatusChange = (leadId: string, newStatus: string, newConnectionStatus?: string) => {
+    setPendingStatusChange(leadId)
+    updateStatusMutation.mutate({ leadId, status: newStatus, connectionStatus: newConnectionStatus })
   }
 
   if (isLoading) {
@@ -410,7 +419,8 @@ export default function LeadsPage() {
                             // Update connection status and lead status
                             updateStatusMutation.mutate({
                               leadId: lead.id,
-                              status: 'contacted'
+                              status: 'contacted',
+                              connectionStatus: 'request_sent'
                             })
                             toast({
                               title: "Connection Request Sent",
@@ -431,7 +441,8 @@ export default function LeadsPage() {
                             // Update connection status and lead status
                             updateStatusMutation.mutate({
                               leadId: lead.id,
-                              status: 'responded'
+                              status: 'responded',
+                              connectionStatus: 'connected'
                             })
                             toast({
                               title: "Connection Accepted",
@@ -580,7 +591,8 @@ export default function LeadsPage() {
                           onClick={() => {
                             updateStatusMutation.mutate({
                               leadId: selectedLead.id,
-                              status: 'contacted'
+                              status: 'contacted',
+                              connectionStatus: 'request_sent'
                             })
                             toast({
                               title: "Connection Request Sent",
@@ -599,7 +611,8 @@ export default function LeadsPage() {
                             onClick={() => {
                               updateStatusMutation.mutate({
                                 leadId: selectedLead.id,
-                                status: 'responded'
+                                status: 'responded',
+                                connectionStatus: 'connected'
                               })
                               toast({
                                 title: "Connection Accepted",
@@ -724,30 +737,62 @@ export default function LeadsPage() {
                 <div>
                   <h3 className="text-lg font-semibold mb-3">Update Status</h3>
                   <div className="space-y-3">
-                    <div className="p-3 bg-muted/30 rounded-lg">
-                      <div className="text-sm font-medium mb-2">Current Status</div>
-                      <Badge className={statusColors[selectedLead.status as keyof typeof statusColors] || statusColors.pending}>
-                        {selectedLead.status.charAt(0).toUpperCase() + selectedLead.status.slice(1)}
-                      </Badge>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-3 bg-muted/30 rounded-lg">
+                        <div className="text-sm font-medium mb-2">Current Status</div>
+                        <Badge className={statusColors[selectedLead.status as keyof typeof statusColors] || statusColors.pending}>
+                          {selectedLead.status.charAt(0).toUpperCase() + selectedLead.status.slice(1)}
+                        </Badge>
+                      </div>
+                      
+                      <div className="p-3 bg-muted/30 rounded-lg">
+                        <div className="text-sm font-medium mb-2">Connection Status</div>
+                        <Badge className={connectionStatusColors[selectedLead.connectionStatus as keyof typeof connectionStatusColors] || connectionStatusColors.not_connected}>
+                          {selectedLead.connectionStatus?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Not Connected'}
+                        </Badge>
+                      </div>
                     </div>
                     
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Change Status To:</label>
-                      <select
-                        value={pendingStatusChange || selectedLead.status}
-                        onChange={(e) => {
-                          setPendingStatusChange(e.target.value)
-                        }}
-                        className="w-full px-3 py-2 border rounded-md bg-background"
-                        disabled={updateStatusMutation.isPending}
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="contacted">Contacted</option>
-                        <option value="responded">Responded</option>
-                        <option value="qualified">Qualified</option>
-                        <option value="nurturing">Nurturing</option>
-                        <option value="converted">Converted</option>
-                      </select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Change Status To:</label>
+                        <select
+                          value={pendingStatusChange || selectedLead.status}
+                          onChange={(e) => {
+                            setPendingStatusChange(e.target.value)
+                          }}
+                          className="w-full px-3 py-2 border rounded-md bg-background"
+                          disabled={updateStatusMutation.isPending}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="contacted">Contacted</option>
+                          <option value="responded">Responded</option>
+                          <option value="qualified">Qualified</option>
+                          <option value="nurturing">Nurturing</option>
+                          <option value="converted">Converted</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Change Connection Status To:</label>
+                        <select
+                          value={selectedLead.connectionStatus}
+                          onChange={(e) => {
+                            updateStatusMutation.mutate({
+                              leadId: selectedLead.id,
+                              connectionStatus: e.target.value
+                            })
+                          }}
+                          className="w-full px-3 py-2 border rounded-md bg-background"
+                          disabled={updateStatusMutation.isPending}
+                        >
+                          <option value="not_connected">Not Connected</option>
+                          <option value="request_sent">Request Sent</option>
+                          <option value="request_received">Request Received</option>
+                          <option value="connected">Connected</option>
+                          <option value="do_not_contact">Do Not Contact</option>
+                        </select>
+                      </div>
                     </div>
                     
                     {pendingStatusChange && pendingStatusChange !== selectedLead.status && (

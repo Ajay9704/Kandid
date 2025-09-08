@@ -30,99 +30,7 @@ export default function CampaignDetailPage() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
-  if (!params?.id) {
-    return <div>Campaign not found</div>
-  }
-
-  const campaignId = params.id as string
-
-  const { data: campaign, isLoading, error } = useQuery({
-    queryKey: ['campaign', campaignId],
-    queryFn: async () => {
-      const response = await fetch(`/api/campaigns/${campaignId}`)
-      if (!response.ok) {
-        throw new Error('Failed to fetch campaign')
-      }
-      return response.json()
-    },
-  })
-
-  const updateCampaignMutation = useMutation({
-    mutationFn: async (updates: any) => {
-      const response = await fetch(`/api/campaigns/${campaignId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      })
-      if (!response.ok) {
-        throw new Error('Failed to update campaign')
-      }
-      return response.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
-      toast({
-        title: "Campaign updated",
-        description: "Campaign has been updated successfully.",
-      })
-    },
-  })
-
-  const [isEditing, setIsEditing] = useState(false)
-  const [editForm, setEditForm] = useState({
-    name: '',
-    description: '',
-  })
-
-  const handleToggleStatus = () => {
-    if (!campaign) return
-    const newStatus = campaign.status === 'active' ? 'paused' : 'active'
-    updateCampaignMutation.mutate({ status: newStatus })
-  }
-
-  const handleSaveChanges = () => {
-    updateCampaignMutation.mutate(editForm)
-    setIsEditing(false)
-  }
-
-  const handleStartEdit = () => {
-    if (campaign) {
-      setEditForm({
-        name: campaign.name,
-        description: campaign.description || '',
-      })
-      setIsEditing(true)
-    }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="p-6 space-y-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !campaign) {
-    return (
-      <div className="p-6 space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600">Campaign not found</h1>
-          <p className="text-muted-foreground">The campaign you're looking for doesn't exist.</p>
-          <Button onClick={() => router.push('/campaigns')} className="mt-4">
-            Back to Campaigns
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
+  // All hooks must be called at the top level, before any conditional logic
   const [sequences] = useState([
     {
       id: '1',
@@ -176,6 +84,100 @@ export default function CampaignDetailPage() {
     }
   ])
 
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+  })
+
+  // Move all conditional rendering logic after all hooks
+  if (!params?.id) {
+    return <div>Campaign not found</div>
+  }
+
+  const campaignId = params.id as string
+
+  const { data: campaign, isLoading, error } = useQuery({
+    queryKey: ['campaign', campaignId],
+    queryFn: async () => {
+      const response = await fetch(`/api/campaigns/${campaignId}`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch campaign')
+      }
+      return response.json()
+    },
+  })
+
+  const updateCampaignMutation = useMutation({
+    mutationFn: async (updates: any) => {
+      const response = await fetch(`/api/campaigns/${campaignId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to update campaign')
+      }
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+      toast({
+        title: "Campaign updated",
+        description: "Campaign has been updated successfully.",
+      })
+    },
+  })
+
+  const handleToggleStatus = () => {
+    if (!campaign) return
+    const newStatus = campaign.status === 'active' ? 'paused' : 'active'
+    updateCampaignMutation.mutate({ status: newStatus })
+  }
+
+  const handleSaveChanges = () => {
+    updateCampaignMutation.mutate(editForm)
+    setIsEditing(false)
+  }
+
+  const handleStartEdit = () => {
+    if (campaign) {
+      setEditForm({
+        name: campaign.name,
+        description: campaign.description || '',
+      })
+      setIsEditing(true)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !campaign) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600">Campaign not found</h1>
+          <p className="text-muted-foreground">The campaign you're looking for doesn't exist.</p>
+          <Button onClick={() => router.push('/campaigns')} className="mt-4">
+            Back to Campaigns
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center space-x-4">
@@ -190,7 +192,7 @@ export default function CampaignDetailPage() {
         <Badge variant={campaign.status === 'active' ? 'default' : 'secondary'}>
           {campaign.status}
         </Badge>
-        <Button variant="outline">
+        <Button variant="outline" onClick={handleToggleStatus}>
           {campaign.status === 'active' ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
           {campaign.status === 'active' ? 'Pause' : 'Resume'}
         </Button>
@@ -411,23 +413,33 @@ export default function CampaignDetailPage() {
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium">Campaign Name</label>
-                  <input
+                  <Input
                     type="text"
-                    value={campaign.name}
-                    className="w-full mt-1 px-3 py-2 border rounded-md"
+                    value={isEditing ? editForm.name : campaign.name}
+                    onChange={(e) => isEditing && setEditForm({...editForm, name: e.target.value})}
+                    className="w-full mt-1"
+                    disabled={!isEditing}
                   />
                 </div>
                 <div>
                   <label className="text-sm font-medium">Description</label>
-                  <textarea
-                    value={campaign.description}
-                    className="w-full mt-1 px-3 py-2 border rounded-md"
+                  <Textarea
+                    value={isEditing ? editForm.description : campaign.description || ''}
+                    onChange={(e) => isEditing && setEditForm({...editForm, description: e.target.value})}
+                    className="w-full mt-1"
                     rows={3}
+                    disabled={!isEditing}
                   />
                 </div>
                 <div className="flex space-x-2">
-                  <Button>Save Changes</Button>
-                  <Button variant="outline">Cancel</Button>
+                  {isEditing ? (
+                    <>
+                      <Button onClick={handleSaveChanges}>Save Changes</Button>
+                      <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
+                    </>
+                  ) : (
+                    <Button onClick={handleStartEdit}>Edit Campaign</Button>
+                  )}
                 </div>
               </div>
             </CardContent>

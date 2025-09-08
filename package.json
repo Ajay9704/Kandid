@@ -14,7 +14,16 @@
     "db:seed": "tsx scripts/seed-data.ts",
     "create-demo-user": "tsx scripts/create-demo-user.ts",
     "test-auth": "tsx scripts/test-auth.ts",
-    "check-user": "tsx scripts/check-user.ts"
+    "check-user": "tsx scripts/check-user.ts",
+    "check-db": "tsx scripts/check-database.ts",
+    "test-db-ops": "tsx scripts/test-db-operations.ts",
+    "check-users": "tsx scripts/check-users.ts",
+    "test-api": "tsx scripts/simple-api-test.ts",
+    "prebuild": "tsx scripts/prebuild.ts",
+    "verify-fix": "tsx scripts/verify-fix.ts",
+    "verify-db": "tsx scripts/verify-database-config.ts",
+    "verify-db-fix": "tsx scripts/verify-database-fix.ts",
+    "test-vercel-db": "tsx scripts/test-vercel-db.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.10.0",

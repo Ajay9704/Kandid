@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next",
+      "config": {
+        "includeFiles": [
+          "lib/**",
+          "components/**",
+          "app/**",
+          "scripts/**"
+        ]
+      }
+    }
+  ],
+  "env": {
+    "DATABASE_URL": ":memory:"
+  },
+  "build": {
+    "env": {
+      "DATABASE_URL": ":memory:"
+    }
+  }
+}
