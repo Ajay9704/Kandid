@@ -38,9 +38,9 @@ async function testVercelDatabase() {
       id: 'test-user-' + Date.now(),
       name: 'Test User',
       email: `test-${Date.now()}@example.com`,
-      emailVerified: 0,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      emailVerified: false, // Changed from 0 to false for PostgreSQL
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
     
     try {

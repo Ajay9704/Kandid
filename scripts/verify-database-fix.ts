@@ -34,8 +34,8 @@ async function verifyDatabaseFix() {
       name: 'Test User',
       email: `test-${Date.now()}@example.com`,
       emailVerified: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
     
     try {
