@@ -22,7 +22,8 @@
     "prebuild": "tsx scripts/prebuild.ts",
     "verify-fix": "tsx scripts/verify-fix.ts",
     "verify-db": "tsx scripts/verify-database-config.ts",
-    "verify-db-fix": "tsx scripts/verify-database-fix.ts"
+    "verify-db-fix": "tsx scripts/verify-database-fix.ts",
+    "test-vercel-db": "tsx scripts/test-vercel-db.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.10.0",
