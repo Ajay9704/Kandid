@@ -21,7 +21,8 @@
     "test-api": "tsx scripts/simple-api-test.ts",
     "prebuild": "tsx scripts/prebuild.ts",
     "verify-fix": "tsx scripts/verify-fix.ts",
-    "verify-db": "tsx scripts/verify-database-config.ts"
+    "verify-db": "tsx scripts/verify-database-config.ts",
+    "verify-db-fix": "tsx scripts/verify-database-fix.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.10.0",

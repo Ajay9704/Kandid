@@ -32,6 +32,7 @@ console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`)
 console.log(`🔧 Vercel: ${process.env.VERCEL || 'not set'}`)
 console.log(`🔧 VERCEL_ENV: ${process.env.VERCEL_ENV || 'not set'}`)
 console.log(`🔧 NEXT_RUNTIME: ${process.env.NEXT_RUNTIME || 'not set'}`)
+console.log(`🔧 DATABASE_URL: ${process.env.DATABASE_URL || 'not set'}`)
 
 let sqlite: Database.Database
 let db: ReturnType<typeof drizzle>
@@ -211,79 +212,114 @@ const useInMemoryDatabase = () => {
   return isServerless()
 }
 
-// For serverless environments or when explicitly requested, use in-memory database
-if (useInMemoryDatabase()) {
-  console.log('☁️  Using in-memory database')
-  sqlite = new Database(':memory:')
-  db = drizzle(sqlite, { schema })
-  
-  // Run initial setup to create tables
+// Enhanced serverless database initialization with better error handling
+const initializeServerlessDatabase = () => {
+  console.log('☁️  Initializing serverless database')
   try {
+    sqlite = new Database(':memory:')
+    db = drizzle(sqlite, { schema })
+    
+    // Run initial setup to create tables
     initializeSchema(sqlite)
-    console.log('✅ In-memory database initialized with all tables')
+    console.log('✅ Serverless in-memory database initialized with all tables')
+    return { sqlite, db }
   } catch (error) {
-    console.error('❌ Failed to initialize in-memory database schema:', error)
+    console.error('❌ Failed to initialize serverless database:', error)
+    throw error
   }
-} else {
-  // For development/local environments, try to use file-based database
-  let dbPath = process.env.DATABASE_URL || './sqlite.db'
+}
 
-  // Remove any protocol prefix (like sqlite:) if present
-  if (dbPath.startsWith('sqlite:')) {
-    dbPath = dbPath.substring(7) // Remove 'sqlite:' prefix
-  }
-
-  // Handle relative paths properly
-  if (dbPath.startsWith('./') || dbPath.startsWith('.\\')) {
-    dbPath = join(process.cwd(), dbPath.substring(2))
-  } else if (dbPath.startsWith('/') || dbPath.startsWith('\\')) {
-    // Already an absolute path, keep as is
-  } else if (!dbPath.includes('/') && !dbPath.includes('\\') && dbPath.endsWith('.db')) {
-    // If it's just a filename ending with .db, put it in the current directory
-    dbPath = join(process.cwd(), dbPath)
-  } else if (!dbPath.includes('/') && !dbPath.includes('\\') && !dbPath.includes('.')) {
-    // If it's just a name without extension, add .db and put in current directory
-    dbPath = join(process.cwd(), `${dbPath}.db`)
-  }
-
-  console.log(`📁 Database path: ${dbPath}`)
-
-  // Ensure the directory exists (but only if it's not the current directory)
-  const separatorIndex = Math.max(dbPath.lastIndexOf('/'), dbPath.lastIndexOf('\\'))
-  if (separatorIndex > 0) {
-    const dbDir = dbPath.substring(0, separatorIndex)
-    if (dbDir !== process.cwd() && !existsSync(dbDir)) {
-      try {
-        console.log(`📁 Creating database directory: ${dbDir}`)
-        mkdirSync(dbDir, { recursive: true })
-      } catch (error) {
-        console.warn(`⚠️  Could not create database directory: ${error}`)
+// Enhanced file-based database initialization with better error handling
+const initializeFileDatabase = (dbPath: string) => {
+  console.log(`📁 Initializing file-based database at: ${dbPath}`)
+  
+  try {
+    // Ensure the directory exists (but only if it's not the current directory)
+    const separatorIndex = Math.max(dbPath.lastIndexOf('/'), dbPath.lastIndexOf('\\'))
+    if (separatorIndex > 0) {
+      const dbDir = dbPath.substring(0, separatorIndex)
+      if (dbDir !== process.cwd() && !existsSync(dbDir)) {
+        try {
+          console.log(`📁 Creating database directory: ${dbDir}`)
+          mkdirSync(dbDir, { recursive: true })
+        } catch (error) {
+          console.warn(`⚠️  Could not create database directory: ${error}`)
+        }
       }
     }
-  }
 
-  try {
     sqlite = new Database(dbPath, { 
       fileMustExist: false // Don't require file to exist
     })
     db = drizzle(sqlite, { schema })
     console.log(`✅ File-based database connected successfully at ${dbPath}`)
+    return { sqlite, db }
   } catch (error) {
     console.error('❌ Failed to initialize file-based database:', error)
-    console.log('🔄 Falling back to in-memory database')
-    
-    // Fallback to in-memory database
+    throw error
+  }
+}
+
+// Main database initialization logic
+try {
+  // For serverless environments or when explicitly requested, use in-memory database
+  if (useInMemoryDatabase()) {
+    const result = initializeServerlessDatabase()
+    sqlite = result.sqlite
+    db = result.db
+  } else {
+    // For development/local environments, try to use file-based database
+    let dbPath = process.env.DATABASE_URL || './sqlite.db'
+
+    // Remove any protocol prefix (like sqlite:) if present
+    if (dbPath.startsWith('sqlite:')) {
+      dbPath = dbPath.substring(7) // Remove 'sqlite:' prefix
+    }
+
+    // Handle relative paths properly
+    if (dbPath.startsWith('./') || dbPath.startsWith('.\\')) {
+      dbPath = join(process.cwd(), dbPath.substring(2))
+    } else if (dbPath.startsWith('/') || dbPath.startsWith('\\')) {
+      // Already an absolute path, keep as is
+    } else if (!dbPath.includes('/') && !dbPath.includes('\\') && dbPath.endsWith('.db')) {
+      // If it's just a filename ending with .db, put it in the current directory
+      dbPath = join(process.cwd(), dbPath)
+    } else if (!dbPath.includes('/') && !dbPath.includes('\\') && !dbPath.includes('.')) {
+      // If it's just a name without extension, add .db and put in current directory
+      dbPath = join(process.cwd(), `${dbPath}.db`)
+    }
+
+    console.log(`📁 Database path: ${dbPath}`)
+
+    const result = initializeFileDatabase(dbPath)
+    sqlite = result.sqlite
+    db = result.db
+  }
+} catch (error) {
+  console.error('❌ Critical database initialization failed:', error)
+  
+  // Emergency fallback to in-memory database
+  console.log('🔄 Emergency fallback to in-memory database')
+  try {
     sqlite = new Database(':memory:')
     db = drizzle(sqlite, { schema })
     
     // Initialize schema in fallback database
-    try {
-      initializeSchema(sqlite)
-    } catch (schemaError) {
-      console.error('❌ Failed to initialize schema in fallback database:', schemaError)
-    }
-    
-    console.log('✅ Using in-memory database as fallback')
+    initializeSchema(sqlite)
+    console.log('✅ Emergency fallback to in-memory database successful')
+  } catch (fallbackError) {
+    console.error('❌ Emergency fallback also failed:', fallbackError)
+    throw new Error('Critical failure: Unable to initialize any database')
+  }
+}
+
+// Initialize schema for non-serverless environments
+if (!isServerless()) {
+  try {
+    initializeSchema(sqlite)
+    console.log('✅ Database schema initialized')
+  } catch (error) {
+    console.error('❌ Failed to initialize database schema:', error)
   }
 }
 
