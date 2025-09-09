@@ -1,27 +1,29 @@
-import { db } from '../lib/db'
-import { user, campaigns, leads, linkedinAccounts, campaignSequences, activityLogs, messages } from '../lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { mongoAdapter } from '../lib/db/mongo-adapter'
 import { nanoid } from 'nanoid'
 
 async function seedData() {
   console.log('🌱 Seeding database with sample data...')
   
   try {
-    // Get the existing demo user
-    const existingUser = await db.select().from(user).where(eq(user.email, 'demo@linkbird.com')).limit(1)
+    // Import and initialize database
+    const { initializeDatabase } = await import('../lib/db')
+    await initializeDatabase()
     
-    if (existingUser.length === 0) {
+    // Get the existing demo user
+    const existingUser = await mongoAdapter.users.findUserByEmail('demo@linkbird.com')
+    
+    if (!existingUser) {
       console.log('❌ Demo user not found. Please run "npm run create-demo-user" first.')
       process.exit(1)
     }
     
-    const demoUserId = existingUser[0].id
-    console.log(`✅ Using existing demo user: ${existingUser[0].email} (ID: ${demoUserId})`)
+    const demoUserId = existingUser.id
+    console.log(`✅ Using existing demo user: ${existingUser.email} (ID: ${demoUserId})`)
 
-    // Create sample campaigns
+    // Create sample campaigns with unique IDs
     const sampleCampaigns = [
       {
-        id: nanoid(),
+        id: `campaign-${nanoid()}`,
         name: 'Q4 Outreach Campaign',
         status: 'active',
         description: 'End of year outreach to enterprise clients',
@@ -33,328 +35,109 @@ async function seedData() {
         updatedAt: new Date(),
       },
       {
-        id: nanoid(),
+        id: `campaign-${nanoid()}`,
         name: 'Product Launch Campaign',
         status: 'active',
-        description: 'Promoting our new product features',
+        description: 'New product launch outreach campaign',
         totalLeads: 0,
         successfulLeads: 0,
         responseRate: 0.0,
         userId: demoUserId,
         createdAt: new Date(),
         updatedAt: new Date(),
-      },
-      {
-        id: nanoid(),
-        name: 'SMB Expansion',
-        status: 'draft',
-        description: 'Targeting small and medium businesses',
-        totalLeads: 0,
-        successfulLeads: 0,
-        responseRate: 0.0,
-        userId: demoUserId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
+      }
     ]
 
-    const insertedCampaigns = await db.insert(campaigns).values(sampleCampaigns).onConflictDoNothing().returning()
-    console.log(`✅ Created ${insertedCampaigns.length} sample campaigns`)
-
-    // Create sample leads with correct schema
-    const sampleLeads = [
-      {
-        id: nanoid(),
-        name: 'John Smith',
-        email: 'john.smith@techcorp.com',
-        company: 'TechCorp Inc.',
-        position: 'VP of Engineering',
-        linkedinUrl: 'https://linkedin.com/in/johnsmith',
-        location: 'San Francisco, CA',
-        status: 'pending',
-        connectionStatus: 'not_connected',
-        sequenceStep: 0,
-        notes: 'Interested in enterprise solution',
-        campaignId: insertedCampaigns.length > 0 ? insertedCampaigns[0].id : 'campaign-1',
-        userId: 'default-user',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: nanoid(),
-        name: 'Sarah Johnson',
-        email: 'sarah.j@innovate.io',
-        company: 'Innovate Solutions',
-        position: 'CTO',
-        linkedinUrl: 'https://linkedin.com/in/sarahjohnson',
-        location: 'New York, NY',
-        status: 'contacted',
-        connectionStatus: 'request_sent',
-        sequenceStep: 1,
-        lastContactDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        lastActivity: 'Connection request sent',
-        lastActivityDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        notes: 'Scheduled demo for next week',
-        campaignId: insertedCampaigns.length > 1 ? insertedCampaigns[1].id : 'campaign-2',
-        userId: 'default-user',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: nanoid(),
-        name: 'Mike Chen',
-        email: 'mike.chen@startup.com',
-        company: 'StartupXYZ',
-        position: 'Founder & CEO',
-        linkedinUrl: 'https://linkedin.com/in/mikechen',
-        location: 'Austin, TX',
-        status: 'responded',
-        connectionStatus: 'connected',
-        sequenceStep: 2,
-        lastContactDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-        lastActivity: 'Replied to follow-up message',
-        lastActivityDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-        notes: 'Requested pricing information',
-        campaignId: insertedCampaigns.length > 0 ? insertedCampaigns[0].id : 'campaign-1',
-        userId: 'default-user',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: nanoid(),
-        name: 'Emily Davis',
-        email: 'emily@enterprise.com',
-        company: 'Enterprise Corp',
-        position: 'Head of Product',
-        linkedinUrl: 'https://linkedin.com/in/emilydavis',
-        location: 'Seattle, WA',
-        status: 'qualified',
-        connectionStatus: 'connected',
-        sequenceStep: 3,
-        lastContactDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-        lastActivity: 'Scheduled demo call',
-        lastActivityDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-        notes: 'High potential lead',
-        campaignId: insertedCampaigns.length > 1 ? insertedCampaigns[1].id : 'campaign-2',
-        userId: 'default-user',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: nanoid(),
-        name: 'Alex Rodriguez',
-        email: 'alex@growth.co',
-        company: 'Growth Co',
-        position: 'Marketing Director',
-        linkedinUrl: 'https://linkedin.com/in/alexrodriguez',
-        location: 'Miami, FL',
-        status: 'nurturing',
-        connectionStatus: 'request_received',
-        sequenceStep: 1,
-        lastContactDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-        lastActivity: 'Connection request received',
-        lastActivityDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-        notes: 'Needs more information about pricing',
-        campaignId: insertedCampaigns.length > 2 ? insertedCampaigns[2].id : 'campaign-3',
-        userId: 'default-user',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: nanoid(),
-        name: 'David Wilson',
-        email: 'david@techstart.com',
-        company: 'TechStart Inc',
-        position: 'Founder',
-        linkedinUrl: 'https://linkedin.com/in/davidwilson',
-        location: 'Boston, MA',
-        status: 'pending',
-        connectionStatus: 'request_received',
-        sequenceStep: 0,
-        lastContactDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-        lastActivity: 'Connection request received',
-        lastActivityDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-        notes: 'Potential high-value client',
-        campaignId: insertedCampaigns.length > 0 ? insertedCampaigns[0].id : 'campaign-1',
-        userId: 'default-user',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ]
-
-    const insertedLeads = await db.insert(leads).values(sampleLeads).onConflictDoNothing().returning()
-    console.log(`✅ Created ${insertedLeads.length} sample leads`)
-
-    // Create sample LinkedIn account (only one per user)
-    const sampleLinkedInAccounts = [
-      {
-        id: nanoid(),
-        name: 'John Smith',
-        linkedinUrl: 'https://linkedin.com/in/john-smith-demo',
-        isActive: true,
-        dailyLimit: 50,
-        weeklyLimit: 200,
-        currentDailyCount: 12,
-        currentWeeklyCount: 45,
-        lastResetDate: new Date(),
-        userId: 'default-user',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ]
-
-    const insertedLinkedInAccounts = await db.insert(linkedinAccounts).values(sampleLinkedInAccounts).onConflictDoNothing().returning()
-    console.log(`✅ Created ${insertedLinkedInAccounts.length} sample LinkedIn account`)
-
-    // Create sample campaign sequences
-    const sampleSequences = [
-      {
-        id: nanoid(),
-        campaignId: insertedCampaigns.length > 0 ? insertedCampaigns[0].id : 'campaign-1',
-        stepNumber: 1,
-        stepType: 'connection_request',
-        title: 'Initial Connection Request',
-        content: 'Hi {{firstName}}, I noticed we both work in the {{industry}} industry and thought it would be great to connect!',
-        delayDays: 0,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: nanoid(),
-        campaignId: insertedCampaigns.length > 0 ? insertedCampaigns[0].id : 'campaign-1',
-        stepNumber: 2,
-        stepType: 'follow_up_message',
-        title: 'Follow-up Message',
-        content: 'Thanks for connecting! I wanted to follow up on our mutual interest in {{topic}}. Would you be open to a brief chat?',
-        delayDays: 3,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: nanoid(),
-        campaignId: insertedCampaigns.length > 1 ? insertedCampaigns[1].id : 'campaign-2',
-        stepNumber: 1,
-        stepType: 'connection_request',
-        title: 'Product Launch Connection',
-        content: 'Hi {{firstName}}, I saw your recent post about {{topic}} and found it very insightful. Would love to connect!',
-        delayDays: 0,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ]
-
-    const insertedSequences = await db.insert(campaignSequences).values(sampleSequences).onConflictDoNothing().returning()
-    console.log(`✅ Created ${insertedSequences.length} sample campaign sequences`)
-
-    // Create sample activity logs
-    const sampleActivities = [
-      {
-        id: nanoid(),
-        leadId: insertedLeads.length > 0 ? insertedLeads[0].id : null,
-        campaignId: insertedCampaigns.length > 0 ? insertedCampaigns[0].id : null,
-        activityType: 'connection_request_sent',
-        description: 'Connection request sent to John Smith',
-        metadata: JSON.stringify({ platform: 'linkedin', messageLength: 120 }),
-        userId: 'default-user',
-        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      },
-      {
-        id: nanoid(),
-        leadId: insertedLeads.length > 1 ? insertedLeads[1].id : null,
-        campaignId: insertedCampaigns.length > 1 ? insertedCampaigns[1].id : null,
-        activityType: 'message_sent',
-        description: 'Follow-up message sent to Sarah Johnson',
-        metadata: JSON.stringify({ platform: 'linkedin', messageLength: 180 }),
-        userId: 'default-user',
-        createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-      },
-      {
-        id: nanoid(),
-        leadId: insertedLeads.length > 2 ? insertedLeads[2].id : null,
-        campaignId: insertedCampaigns.length > 0 ? insertedCampaigns[0].id : null,
-        activityType: 'profile_viewed',
-        description: 'Profile viewed: Mike Chen',
-        metadata: JSON.stringify({ platform: 'linkedin', viewDuration: 45 }),
-        userId: 'default-user',
-        createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-      },
-    ]
-
-    const insertedActivities = await db.insert(activityLogs).values(sampleActivities).onConflictDoNothing().returning()
-    console.log(`✅ Created ${insertedActivities.length} sample activities`)
-
-    // Create sample messages
-    const sampleMessages = [
-      {
-        id: nanoid(),
-        leadId: insertedLeads.length > 0 ? insertedLeads[0].id : 'lead-1',
-        campaignId: insertedCampaigns.length > 0 ? insertedCampaigns[0].id : null,
-        sequenceStepId: insertedSequences.length > 0 ? insertedSequences[0].id : null,
-        messageType: 'connection_request',
-        content: 'Hi John, I noticed we both work in the tech industry and thought it would be great to connect!',
-        status: 'sent',
-        sentAt: new Date(Date.now() - 7 * 60 * 1000),
-        userId: 'default-user',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: nanoid(),
-        leadId: insertedLeads.length > 1 ? insertedLeads[1].id : 'lead-2',
-        campaignId: insertedCampaigns.length > 1 ? insertedCampaigns[1].id : null,
-        sequenceStepId: insertedSequences.length > 1 ? insertedSequences[1].id : null,
-        messageType: 'follow_up',
-        content: 'Thanks for connecting! I wanted to follow up on our mutual interest in tech innovation...',
-        status: 'replied',
-        sentAt: new Date(Date.now() - 15 * 60 * 1000),
-        readAt: new Date(Date.now() - 12 * 60 * 1000),
-        repliedAt: new Date(Date.now() - 10 * 60 * 1000),
-        userId: 'default-user',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: nanoid(),
-        leadId: insertedLeads.length > 2 ? insertedLeads[2].id : 'lead-3',
-        campaignId: insertedCampaigns.length > 0 ? insertedCampaigns[0].id : null,
-        messageType: 'connection_request',
-        content: 'Great to connect with you! I saw your recent post about AI trends and found it very insightful.',
-        status: 'read',
-        sentAt: new Date(Date.now() - 23 * 60 * 1000),
-        readAt: new Date(Date.now() - 20 * 60 * 1000),
-        userId: 'default-user',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ]
-
-    const insertedMessages = await db.insert(messages).values(sampleMessages).onConflictDoNothing().returning()
-    console.log(`✅ Created ${insertedMessages.length} sample messages`)
-
-    // Update campaign lead counts
-    const allCampaigns = await db.select().from(campaigns)
-    for (const campaign of allCampaigns) {
-      const campaignLeads = insertedLeads.filter(lead => lead.campaignId === campaign.id)
-      const successfulLeads = campaignLeads.filter(lead => 
-        ['contacted', 'responded', 'qualified'].includes(lead.status)
-      ).length
-      
-      await db.update(campaigns)
-        .set({
-          totalLeads: campaignLeads.length,
-          successfulLeads,
-          responseRate: campaignLeads.length > 0 ? (successfulLeads / campaignLeads.length) * 100 : 0,
-          updatedAt: new Date(),
-        })
-        .where(eq(campaigns.id, campaign.id))
+    // Insert campaigns and store their actual IDs
+    const createdCampaigns = [];
+    for (const campaign of sampleCampaigns) {
+      try {
+        // Check if campaign already exists
+        const existingCampaign = await mongoAdapter.campaigns.findCampaignByNameAndUserId(campaign.name, demoUserId);
+        if (existingCampaign) {
+          console.log(`⚠️ Campaign ${campaign.name} already exists (ID: ${existingCampaign.id})`);
+          createdCampaigns.push(existingCampaign);
+        } else {
+          const createdCampaign = await mongoAdapter.campaigns.createCampaign(campaign);
+          createdCampaigns.push(createdCampaign);
+          console.log(`✅ Created campaign: ${campaign.name} (ID: ${createdCampaign.id})`);
+        }
+      } catch (error) {
+        console.log(`⚠️ Error creating campaign ${campaign.name}:`, error instanceof Error ? error.message : 'Unknown error');
+      }
     }
 
-    console.log('✅ Updated campaign statistics')
-    console.log('🎉 Database seeded successfully!')
-    process.exit(0)
+    // Create sample leads only if we have campaigns
+    if (createdCampaigns.length >= 2) {
+      const sampleLeads = [
+        {
+          id: `lead-${nanoid()}`,
+          name: 'John Smith',
+          email: 'john.smith@example.com',
+          company: 'TechCorp',
+          position: 'CTO',
+          linkedinUrl: 'https://linkedin.com/in/johnsmith',
+          location: 'San Francisco, CA',
+          status: 'pending',
+          connectionStatus: 'not_connected',
+          sequenceStep: 0,
+          campaignId: createdCampaigns[0].id,
+          userId: demoUserId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: `lead-${nanoid()}`,
+          name: 'Sarah Johnson',
+          email: 'sarah.johnson@example.com',
+          company: 'InnovateCo',
+          position: 'Marketing Director',
+          linkedinUrl: 'https://linkedin.com/in/sarahjohnson',
+          location: 'New York, NY',
+          status: 'contacted',
+          connectionStatus: 'connected',
+          sequenceStep: 2,
+          campaignId: createdCampaigns[0].id,
+          userId: demoUserId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: `lead-${nanoid()}`,
+          name: 'Michael Chen',
+          email: 'michael.chen@example.com',
+          company: 'StartupXYZ',
+          position: 'Founder',
+          linkedinUrl: 'https://linkedin.com/in/michaelchen',
+          location: 'Austin, TX',
+          status: 'converted',
+          connectionStatus: 'connected',
+          sequenceStep: 5,
+          campaignId: createdCampaigns[1].id,
+          userId: demoUserId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      ]
+
+      // Insert leads
+      for (const lead of sampleLeads) {
+        try {
+          // Check if lead already exists
+          const existingLead = await mongoAdapter.leads.findLeadById(lead.id);
+          if (existingLead) {
+            console.log(`⚠️ Lead ${lead.name} already exists`);
+          } else {
+            await mongoAdapter.leads.createLead(lead);
+            console.log(`✅ Created lead: ${lead.name}`);
+          }
+        } catch (error) {
+          console.log(`⚠️ Error creating lead ${lead.name}:`, error instanceof Error ? error.message : 'Unknown error');
+        }
+      }
+    }
+
+    console.log('🎉 Database seeding completed successfully!')
   } catch (error) {
     console.error('❌ Error seeding database:', error)
     process.exit(1)

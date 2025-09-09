@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -18,12 +18,27 @@ interface Activity {
   icon: LucideIcon
   type?: string
   timestamp?: string
+  _id?: string
+  userId?: string
+  leadId?: string
+  campaignId?: string
+  metadata?: string
+}
+
+interface ApiActivity extends Omit<Activity, 'icon'> {
+  _id?: string
+  userId: string
+  leadId?: string
+  campaignId?: string
+  metadata?: string
+  createdAt: string
 }
 
 export default function ActivityPage() {
   const [searchTerm, setSearchTerm] = useState('')
+  const [timeFilter, setTimeFilter] = useState('all')
 
-  const { data: activities = [], isLoading } = useQuery<Activity[]>({
+  const { data: activities = [], isLoading, refetch } = useQuery<Activity[]>({
     queryKey: ['activities'],
     queryFn: async () => {
       const response = await fetch('/api/activity')
@@ -32,58 +47,8 @@ export default function ActivityPage() {
       // Handle different response formats
       const activities = Array.isArray(data) ? data : (data.data || [])
 
-      // Add mock data for demo if no real data
-      if (activities.length === 0) {
-        return [
-          {
-            id: '1',
-            activityType: 'connection_request_sent',
-            description: 'Connection request sent to Sarah Johnson',
-            leadName: 'Sarah Johnson',
-            company: 'Tech Corp',
-            createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-            icon: UserPlus,
-          },
-          {
-            id: '2',
-            activityType: 'profile_viewed',
-            description: 'Profile viewed by Mike Chen',
-            leadName: 'Mike Chen',
-            company: 'StartupXYZ',
-            createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-            icon: Eye,
-          },
-          {
-            id: '3',
-            activityType: 'message_sent',
-            description: 'Follow-up message sent to John Smith',
-            leadName: 'John Smith',
-            company: 'Enterprise Inc',
-            createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-            icon: Send,
-          },
-          {
-            id: '4',
-            activityType: 'connection_accepted',
-            description: 'Connection request accepted by Lisa Wang',
-            leadName: 'Lisa Wang',
-            company: 'Innovation Labs',
-            createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-            icon: User,
-          },
-          {
-            id: '5',
-            activityType: 'message_replied',
-            description: 'Message replied by David Brown',
-            leadName: 'David Brown',
-            company: 'Growth Co',
-            createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-            icon: MessageSquare,
-          }
-        ]
-      }
-
-      return activities.map((activity: any) => ({
+      // Always use real data if available
+      return activities.map((activity: ApiActivity) => ({
         ...activity,
         icon: activity.activityType === 'connection_request_sent' ? UserPlus :
           activity.activityType === 'profile_viewed' ? Eye :
@@ -92,14 +57,40 @@ export default function ActivityPage() {
                 MessageSquare
       }))
     },
-    refetchInterval: 15000, // Refetch every 15 seconds for real-time updates
+    staleTime: 0, // Don't cache, always fetch fresh data
+    gcTime: 0, // Don't cache, always fetch fresh data
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Refetch when component mounts
+    refetchInterval: 10000, // Refetch every 10 seconds for real-time updates
   })
 
-  const filteredActivities = activities.filter((activity: Activity) =>
-    activity.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    activity.leadName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    activity.company?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Refetch when time filter changes
+  useEffect(() => {
+    refetch()
+  }, [timeFilter, refetch])
+
+  const filteredActivities = activities.filter((activity: Activity) => {
+    const matchesSearch = activity.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (activity.leadName && activity.leadName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (activity.company && activity.company.toLowerCase().includes(searchTerm.toLowerCase()))
+    
+    // Apply time filter
+    const activityDate = new Date(activity.createdAt)
+    const now = new Date()
+    
+    if (timeFilter === 'today') {
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      return matchesSearch && activityDate >= today
+    } else if (timeFilter === 'week') {
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      return matchesSearch && activityDate >= oneWeekAgo
+    } else if (timeFilter === 'month') {
+      const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+      return matchesSearch && activityDate >= oneMonthAgo
+    }
+    
+    return matchesSearch
+  })
 
   const getActivityColor = (type: string) => {
     switch (type) {
@@ -126,9 +117,27 @@ export default function ActivityPage() {
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" size="sm">Today</Button>
-          <Button variant="outline" size="sm">This Week</Button>
-          <Button variant="outline" size="sm">This Month</Button>
+          <Button 
+            variant={timeFilter === 'today' ? 'default' : 'outline'} 
+            size="sm"
+            onClick={() => setTimeFilter('today')}
+          >
+            Today
+          </Button>
+          <Button 
+            variant={timeFilter === 'week' ? 'default' : 'outline'} 
+            size="sm"
+            onClick={() => setTimeFilter('week')}
+          >
+            This Week
+          </Button>
+          <Button 
+            variant={timeFilter === 'month' ? 'default' : 'outline'} 
+            size="sm"
+            onClick={() => setTimeFilter('month')}
+          >
+            This Month
+          </Button>
         </div>
       </div>
 

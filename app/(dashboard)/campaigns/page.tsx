@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/sheet'
 import { Search, Plus, Play, Pause, Edit, Trash2 } from 'lucide-react'
 import { useToast } from '@/lib/hooks/use-toast'
+import { useSocket } from '@/lib/hooks/use-socket'
 
 interface Campaign {
   id: string
@@ -52,8 +53,14 @@ async function fetchCampaigns(): Promise<Campaign[]> {
     throw new Error('Failed to fetch campaigns')
   }
   const data = await response.json()
-  // Handle different response formats
-  return Array.isArray(data) ? data : (data.data || [])
+  // Handle different response formats - make sure we return an array
+  if (Array.isArray(data)) {
+    return data
+  } else if (data.data && Array.isArray(data.data)) {
+    return data.data
+  } else {
+    return []
+  }
 }
 
 async function createCampaign(campaignData: Partial<Campaign>): Promise<Campaign> {
@@ -80,15 +87,29 @@ export default function CampaignsPage() {
     status: 'draft',
   })
 
+  const { isConnected, on } = useSocket()
+
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const router = useRouter()
 
-  const { data: campaigns = [], isLoading, error } = useQuery({
+  // Listen for real-time updates
+  useEffect(() => {
+    const unsubscribe = on('campaigns_updated', () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [on, queryClient])
+
+  const { data: campaigns = [], isLoading, error, refetch } = useQuery<Campaign[]>({
     queryKey: ['campaigns'],
     queryFn: fetchCampaigns,
-    staleTime: 5000, // Consider data fresh for 5 seconds
-    refetchOnWindowFocus: false, // Don't refetch on window focus
+    staleTime: 0, // Don't cache, always fetch fresh data
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Refetch when component mounts
   })
 
   const createCampaignMutation = useMutation({
@@ -137,7 +158,7 @@ export default function CampaignsPage() {
     }
   }
 
-  const filteredCampaigns = campaigns.filter(campaign => {
+  const filteredCampaigns = campaigns.filter((campaign: Campaign) => {
     const matchesSearch = campaign.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (campaign.description && campaign.description.toLowerCase().includes(searchTerm.toLowerCase()))
     const matchesStatus = statusFilter === 'all' || campaign.status === statusFilter
@@ -264,7 +285,7 @@ export default function CampaignsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {campaigns.filter(c => c.status === 'active').length}
+              {campaigns.filter((c: Campaign) => c.status === 'active').length}
             </div>
           </CardContent>
         </Card>
@@ -275,7 +296,7 @@ export default function CampaignsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {campaigns.reduce((sum, c) => sum + c.totalLeads, 0)}
+              {campaigns.reduce((sum: number, c) => sum + c.totalLeads, 0)}
             </div>
           </CardContent>
         </Card>
@@ -287,7 +308,7 @@ export default function CampaignsPage() {
           <CardContent>
             <div className="text-2xl font-bold">
               {campaigns.length > 0 
-                ? (campaigns.reduce((sum, c) => sum + c.responseRate, 0) / campaigns.length).toFixed(1)
+                ? (campaigns.reduce((sum: number, c) => sum + c.responseRate, 0) / campaigns.length).toFixed(1)
                 : '0.0'
               }%
             </div>
@@ -362,7 +383,7 @@ export default function CampaignsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCampaigns.map((campaign) => (
+              {filteredCampaigns.map((campaign: Campaign) => (
                 <TableRow key={campaign.id}>
                   <TableCell>
                     <div>

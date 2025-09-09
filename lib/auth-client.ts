@@ -1,74 +1,124 @@
 "use client"
 
-import { useSession as useNextAuthSession, signIn as nextAuthSignIn, signOut as nextAuthSignOut } from "next-auth/react"
+import { signIn, signOut, useSession } from "next-auth/react"
+import { useState, useEffect } from "react"
 
-export const useSession = () => {
-  const { data: session, status } = useNextAuthSession()
-  
-  return {
-    data: session,
-    isPending: status === "loading",
-    isAuthenticated: !!session,
-  }
-}
+export function useAuth() {
+  const { data: session, status } = useSession()
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
 
-export const signIn = nextAuthSignIn
-export const signOut = nextAuthSignOut
+  useEffect(() => {
+    if (status === "loading") {
+      setIsLoading(true)
+      return
+    }
 
-// Sign up function to match the expected API in the signup page
-export const signUp = {
-  email: async ({ name, email, password }: { name: string; email: string; password: string }) => {
+    if (session?.user) {
+      setIsAuthenticated(true)
+      setUser(session.user)
+    } else {
+      setIsAuthenticated(false)
+      setUser(null)
+    }
+    
+    setIsLoading(false)
+  }, [session, status])
+
+  const loginWithCredentials = async (email: string, password: string) => {
     try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name, email, password }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        return {
-          error: {
-            message: data.error || 'Failed to create account',
-          },
-          data: null,
-        }
-      }
-
-      // Successfully created account, now sign them in
-      const signInResult = await nextAuthSignIn('credentials', {
+      const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
       })
-
-      if (signInResult?.error) {
-        return {
-          error: {
-            message: 'Account created but sign in failed. Please try signing in manually.',
-          },
-          data: null,
-        }
-      }
-
-      return {
-        data: {
-          user: data.user,
-        },
-        error: null,
-      }
+      return result
     } catch (error) {
+      console.error("Login error:", error)
+      return { 
+        error: "An error occurred during login",
+        status: 500,
+        ok: false,
+        url: null
+      }
+    }
+  }
+
+  const loginWithGoogle = async () => {
+    try {
+      const result = await signIn("google", {
+        callbackUrl: "/dashboard",
+        redirect: true,
+      })
+      return result
+    } catch (error) {
+      console.error("Google login error:", error)
+      // For Google login, we don't return a structured response since it redirects
+      return { 
+        error: "An error occurred during Google login",
+        status: 500,
+        ok: false,
+        url: null
+      }
+    }
+  }
+
+  const logout = async () => {
+    try {
+      await signOut({ redirect: true, callbackUrl: "/auth/signin" })
+    } catch (error) {
+      console.error("Logout error:", error)
+    }
+  }
+
+  return {
+    isAuthenticated,
+    isLoading,
+    user,
+    loginWithCredentials,
+    loginWithGoogle,
+    logout,
+  }
+}
+
+// Client-side signup function
+export async function signUp({ name, email, password }: { name: string; email: string; password: string }) {
+  try {
+    const response = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, email, password }),
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
       return {
         error: {
-          message: error instanceof Error ? error.message : 'An error occurred during signup',
+          message: result.error || 'Failed to create account',
         },
         data: null,
       }
     }
-  },
+
+    return {
+      error: null,
+      data: result,
+    }
+  } catch (error) {
+    console.error('Signup error:', error)
+    return {
+      error: {
+        message: 'An error occurred. Please try again.',
+      },
+      data: null,
+    }
+  }
 }
 
-export type Session = ReturnType<typeof useSession>['data']
+// Export the hooks and functions directly for easier import
+export { useSession, signOut }
+export default useAuth

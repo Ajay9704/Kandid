@@ -1,20 +1,21 @@
-import { db } from '../lib/db/index'
-import { user } from '../lib/db/schema'
-import { desc } from 'drizzle-orm'
+import { mongoAdapter } from '../lib/db/mongo-adapter'
 
 async function checkUsers() {
   try {
     console.log('🔍 Checking users in database...')
     
-    // Test querying users
-    const allUsers = await db.select().from(user).orderBy(desc(user.createdAt)).limit(5)
-    console.log(`✅ Found ${allUsers.length} users`)
+    // Import and initialize database
+    const { initializeDatabase } = await import('../lib/db')
+    await initializeDatabase()
     
-    if (allUsers.length > 0) {
-      console.log('📋 Sample users:')
-      allUsers.forEach(u => {
-        console.log(`  - ${u.name} (${u.email})`)
-      })
+    // Check for demo user specifically
+    const demoUser = await mongoAdapter.users.findUserByEmail('demo@linkbird.com')
+    if (demoUser) {
+      console.log('✅ Demo user found:')
+      console.log('  -', demoUser.name, '(', demoUser.email, ')')
+      console.log('  - ID:', demoUser.id)
+    } else {
+      console.log('ℹ️  Demo user not found')
     }
     
     return true

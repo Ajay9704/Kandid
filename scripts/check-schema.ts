@@ -1,19 +1,31 @@
 import { db } from '../lib/db'
-import { sql } from 'drizzle-orm'
+import { COLLECTIONS } from '../lib/db/schema'
 
 async function checkSchema() {
   try {
-    // Check what tables exist
-    const tables = await db.all(sql`SELECT name FROM sqlite_master WHERE type='table'`)
-    console.log('Tables:', tables)
+    if (!db) {
+      throw new Error('Database not initialized')
+    }
     
-    // Check leads table structure
-    const leadsSchema = await db.all(sql`PRAGMA table_info(leads)`)
-    console.log('Leads table columns:', leadsSchema)
+    // Check what collections exist
+    const collections = await db.listCollections().toArray()
+    console.log('Collections:', collections.map(c => c.name))
     
-    // Check campaigns table structure
-    const campaignsSchema = await db.all(sql`PRAGMA table_info(campaigns)`)
-    console.log('Campaigns table columns:', campaignsSchema)
+    // Check leads collection structure
+    try {
+      const leadsCount = await db.collection(COLLECTIONS.LEADS).countDocuments()
+      console.log(`Leads collection: ${leadsCount} documents`)
+    } catch (error) {
+      console.log('Leads collection not accessible:', error)
+    }
+    
+    // Check campaigns collection structure
+    try {
+      const campaignsCount = await db.collection(COLLECTIONS.CAMPAIGNS).countDocuments()
+      console.log(`Campaigns collection: ${campaignsCount} documents`)
+    } catch (error) {
+      console.log('Campaigns collection not accessible:', error)
+    }
     
   } catch (error) {
     console.error('Error checking schema:', error)

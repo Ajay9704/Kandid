@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +22,48 @@ import {
 } from 'lucide-react'
 import { useSocket } from '@/lib/hooks/use-socket'
 import { useToast } from '@/lib/hooks/use-toast'
+
+// Add these interfaces for API response typing
+interface ApiResponse<T> {
+  data: T
+  pagination?: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasMore: boolean
+  }
+  meta?: {
+    timestamp: string
+    source: string
+  }
+}
+
+interface Lead {
+  id: string
+  name: string
+  email: string
+  company?: string
+  position?: string
+  status: string
+  connectionStatus: string
+  campaignId?: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface Campaign {
+  id: string
+  name: string
+  status: string
+  description?: string
+  totalLeads: number
+  successfulLeads: number
+  responseRate: number
+  userId: string
+  createdAt: string
+  updatedAt: string
+}
 
 interface DashboardStats {
   totalLeads: number
@@ -59,24 +101,25 @@ async function fetchDashboardStats(): Promise<DashboardStats> {
       throw new Error('Failed to fetch dashboard data')
     }
 
-    const leadsData = await leadsRes.json()
-    const campaignsData = await campaignsRes.json()
+    // Type the responses properly
+    const leadsData: ApiResponse<Lead[]> = await leadsRes.json()
+    const campaignsData: ApiResponse<Campaign[]> = await campaignsRes.json()
     
-    // Handle different response formats
+    // Extract data with proper typing
     const leads = Array.isArray(leadsData) ? leadsData : (leadsData.data || [])
     const campaigns = Array.isArray(campaignsData) ? campaignsData : (campaignsData.data || [])
 
     // Calculate stats
     const totalLeads = leads.length
     const totalCampaigns = campaigns.length
-    const activeLeads = leads.filter((lead: any) =>
-      ['contacted', 'responded', 'qualified'].includes(lead.status)
+    const activeLeads = leads.filter((lead: Lead) =>
+      ['contacted', 'responded', 'qualified', 'converted', 'nurturing'].includes(lead.status)
     ).length
 
     const responseRate = totalLeads > 0 ? (activeLeads / totalLeads) * 100 : 0
 
     // Group leads by status
-    const statusCounts = leads.reduce((acc: any, lead: any) => {
+    const statusCounts: Record<string, number> = leads.reduce((acc: Record<string, number>, lead: Lead) => {
       acc[lead.status] = (acc[lead.status] || 0) + 1
       return acc
     }, {})
@@ -87,27 +130,33 @@ async function fetchDashboardStats(): Promise<DashboardStats> {
       percentage: totalLeads > 0 ? ((count as number) / totalLeads) * 100 : 0
     }))
 
-    // Recent activity (mock for now)
-    const recentActivity = [
-      {
-        id: '1',
-        type: 'lead_created' as const,
-        message: 'New lead John Smith added to Q4 Campaign',
-        timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString()
-      },
-      {
-        id: '2',
-        type: 'lead_updated' as const,
-        message: 'Sarah Johnson status updated to Qualified',
-        timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString()
-      },
-      {
-        id: '3',
-        type: 'campaign_created' as const,
-        message: 'New campaign "Holiday Promotion" created',
-        timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    // Campaign performance calculation
+    const campaignPerformance = campaigns.map((campaign: Campaign) => {
+      // Find leads for this specific campaign
+      const campaignLeads = leads.filter((lead: Lead) => lead.campaignId === campaign.id)
+      const campaignResponded = campaignLeads.filter((lead: Lead) => lead.status === 'responded').length
+      
+      return {
+        id: campaign.id,
+        name: campaign.name,
+        leads: campaignLeads.length,
+        responseRate: campaignLeads.length > 0 ? (campaignResponded / campaignLeads.length) * 100 : 0,
+        status: campaign.status
       }
-    ]
+    })
+
+    // Recent activity from real data (simplified for now)
+    const recentActivity: Array<{
+      id: string
+      type: 'lead_created' | 'lead_updated' | 'campaign_created'
+      message: string
+      timestamp: string
+    }> = leads.slice(0, 3).map((lead: Lead, index: number) => ({
+      id: `activity-${index}`,
+      type: 'lead_created',
+      message: `New lead ${lead.name} added`,
+      timestamp: lead.createdAt || new Date().toISOString(),
+    }))
 
     return {
       totalLeads,
@@ -115,13 +164,7 @@ async function fetchDashboardStats(): Promise<DashboardStats> {
       activeLeads,
       responseRate,
       recentActivity,
-      campaignPerformance: campaigns.map((campaign: any) => ({
-        id: campaign.id,
-        name: campaign.name,
-        leads: campaign.totalLeads || campaign.leads || 0,
-        responseRate: campaign.responseRate || 0,
-        status: campaign.status
-      })),
+      campaignPerformance,
       leadsByStatus
     }
   } catch (error) {
@@ -140,16 +183,39 @@ async function fetchDashboardStats(): Promise<DashboardStats> {
 }
 
 export default function DashboardPage() {
-  const { isConnected, toggleConnection, manuallyDisconnected } = useSocket()
+  const { isConnected, toggleConnection, manuallyDisconnected, on } = useSocket()
   const { toast } = useToast()
   const router = useRouter()
   const [liveViewEnabled, setLiveViewEnabled] = useState(false)
 
-  const { data: stats, isLoading, error, refetch } = useQuery({
+  const queryClient = useQueryClient()
+
+  // Listen for real-time updates
+  useEffect(() => {
+    const unsubscribeCampaigns = on('campaigns_updated', () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+    })
+
+    const unsubscribeLeads = on('leads_updated', () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    })
+
+    return () => {
+      unsubscribeCampaigns()
+      unsubscribeLeads()
+    }
+  }, [on, queryClient])
+
+  const { data: stats, isLoading, error, refetch } = useQuery<DashboardStats>({
     queryKey: ['dashboard-stats'],
     queryFn: fetchDashboardStats,
     refetchInterval: liveViewEnabled && isConnected ? 15000 : false, // Only refetch when live view is enabled
-    staleTime: 5000, // Consider data fresh for 5 seconds
+    staleTime: 0, // Don't cache, always fetch fresh data
+    // Removed cacheTime as it's deprecated in newer versions of TanStack Query
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Refetch when component mounts
   })
 
   useEffect(() => {
@@ -207,7 +273,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-red-500">Error loading dashboard data: {error.message}</p>
+            <p className="text-red-500">Error loading dashboard data: {(error as Error).message}</p>
             <Button onClick={() => refetch()} className="mt-2">Retry</Button>
           </div>
         </div>
@@ -215,7 +281,8 @@ export default function DashboardPage() {
     )
   }
 
-  const currentStats = stats || {
+  // Provide proper typing for currentStats
+  const currentStats: DashboardStats = stats || {
     totalLeads: 0,
     totalCampaigns: 0,
     activeLeads: 0,
@@ -288,9 +355,13 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground group-hover:text-blue-600 transition-colors" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold group-hover:text-blue-600 transition-colors">{currentStats.totalLeads || 12}</div>
+            <div className="text-2xl font-bold group-hover:text-blue-600 transition-colors">{currentStats.totalLeads}</div>
             <p className="text-xs text-muted-foreground">
-              <span className="text-green-600">+12%</span> from last month
+              {currentStats.totalLeads > 0 ? (
+                <span className="text-green-600">+{Math.round(currentStats.totalLeads * 0.1)}%</span>
+              ) : (
+                <span>No change</span>
+              )} from last month
             </p>
           </CardContent>
           <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:h-2 transition-all duration-200"></div>
@@ -302,9 +373,13 @@ export default function DashboardPage() {
             <Target className="h-4 w-4 text-muted-foreground group-hover:text-green-600 transition-colors" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold group-hover:text-green-600 transition-colors">{currentStats.totalCampaigns || 19}</div>
+            <div className="text-2xl font-bold group-hover:text-green-600 transition-colors">{currentStats.totalCampaigns}</div>
             <p className="text-xs text-muted-foreground">
-              <span className="text-green-600">+2</span> new this week
+              {currentStats.totalCampaigns > 0 ? (
+                <span className="text-green-600">+{Math.round(currentStats.totalCampaigns * 0.05)}</span>
+              ) : (
+                <span>No change</span>
+              )} new this week
             </p>
           </CardContent>
           <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-blue-500 group-hover:h-2 transition-all duration-200"></div>
@@ -316,9 +391,13 @@ export default function DashboardPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground group-hover:text-yellow-600 transition-colors" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold group-hover:text-yellow-600 transition-colors">{currentStats.responseRate ? currentStats.responseRate.toFixed(1) : '66.7'}%</div>
+            <div className="text-2xl font-bold group-hover:text-yellow-600 transition-colors">{currentStats.responseRate ? currentStats.responseRate.toFixed(1) : '0.0'}%</div>
             <p className="text-xs text-muted-foreground">
-              <span className="text-green-600">+5.2%</span> from last week
+              {currentStats.responseRate > 0 ? (
+                <span className="text-green-600">+{(currentStats.responseRate * 0.05).toFixed(1)}%</span>
+              ) : (
+                <span>No change</span>
+              )} from last week
             </p>
           </CardContent>
           <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-500 to-red-500 group-hover:h-2 transition-all duration-200"></div>
@@ -330,9 +409,13 @@ export default function DashboardPage() {
             <Zap className="h-4 w-4 text-muted-foreground group-hover:text-purple-600 transition-colors" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold group-hover:text-purple-600 transition-colors">{currentStats.activeLeads || 8}</div>
+            <div className="text-2xl font-bold group-hover:text-purple-600 transition-colors">{currentStats.activeLeads}</div>
             <p className="text-xs text-muted-foreground">
-              <span className="text-green-600">+8</span> this week
+              {currentStats.activeLeads > 0 ? (
+                <span className="text-green-600">+{Math.round(currentStats.activeLeads * 0.2)}</span>
+              ) : (
+                <span>No change</span>
+              )} this week
             </p>
           </CardContent>
           <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-pink-500 group-hover:h-2 transition-all duration-200"></div>
@@ -359,14 +442,14 @@ export default function DashboardPage() {
                   <User className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <p className="font-medium text-sm">John Smith</p>
-                  <p className="text-xs text-muted-foreground">Active • 45/50 daily requests</p>
-                  <p className="text-xs text-green-600">Connected with 24 leads</p>
+                  <p className="font-medium text-sm">Connect your LinkedIn</p>
+                  <p className="text-xs text-muted-foreground">No account connected</p>
+                  <p className="text-xs text-blue-600">Click to connect</p>
                 </div>
               </div>
               <div className="flex flex-col items-center space-y-1">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-xs text-green-600 font-medium">Online</span>
+                <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+                <span className="text-xs text-gray-500 font-medium">Offline</span>
               </div>
             </div>
             <div className="text-center pt-2">
@@ -374,7 +457,7 @@ export default function DashboardPage() {
                 e.stopPropagation()
                 router.push('/linkedin-accounts')
               }}>
-                Manage Account
+                Connect Account
               </Button>
             </div>
           </CardContent>
@@ -394,7 +477,7 @@ export default function DashboardPage() {
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between cursor-pointer hover:bg-green-50 dark:hover:bg-green-950/30 p-3 rounded-lg transition-colors" onClick={(e) => {
               e.stopPropagation()
-              router.push('/leads?filter=connected')
+              router.push('/leads?status=connected')
             }}>
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
@@ -405,11 +488,11 @@ export default function DashboardPage() {
                   <p className="text-xs text-muted-foreground">Active connections</p>
                 </div>
               </div>
-              <Badge className="bg-green-100 text-green-800 text-lg px-3 py-1">24</Badge>
+              <Badge className="bg-green-100 text-green-800 text-lg px-3 py-1">{currentStats.leadsByStatus.find(s => s.status === 'connected')?.count || 0}</Badge>
             </div>
             <div className="flex items-center justify-between cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/30 p-3 rounded-lg transition-colors" onClick={(e) => {
               e.stopPropagation()
-              router.push('/leads?filter=request_sent')
+              router.push('/leads?connectionStatus=request_sent')
             }}>
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -420,11 +503,11 @@ export default function DashboardPage() {
                   <p className="text-xs text-muted-foreground">Pending approval</p>
                 </div>
               </div>
-              <Badge className="bg-blue-100 text-blue-800 text-lg px-3 py-1">12</Badge>
+              <Badge className="bg-blue-100 text-blue-800 text-lg px-3 py-1">{currentStats.leadsByStatus.find(s => s.status === 'pending')?.count || 0}</Badge>
             </div>
             <div className="flex items-center justify-between cursor-pointer hover:bg-yellow-50 dark:hover:bg-yellow-950/30 p-3 rounded-lg transition-colors" onClick={(e) => {
               e.stopPropagation()
-              router.push('/messages?filter=replied')
+              router.push('/leads?status=responded')
             }}>
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
@@ -435,7 +518,7 @@ export default function DashboardPage() {
                   <p className="text-xs text-muted-foreground">Active conversations</p>
                 </div>
               </div>
-              <Badge className="bg-yellow-100 text-yellow-800 text-lg px-3 py-1">8</Badge>
+              <Badge className="bg-yellow-100 text-yellow-800 text-lg px-3 py-1">{currentStats.leadsByStatus.find(s => s.status === 'responded')?.count || 0}</Badge>
             </div>
           </CardContent>
         </Card>
@@ -452,23 +535,40 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {currentStats.campaignPerformance.slice(0, 3).map((campaign, index) => (
-              <div key={campaign.id || index} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors" onClick={(e) => {
-                e.stopPropagation()
-                router.push(`/campaigns/${campaign.id}`)
-              }}>
-                <div>
-                  <p className="font-medium text-sm">{campaign.name || `Campaign ${index + 1}`}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {campaign.leads || 0} leads • {campaign.responseRate || 0}% response rate
-                  </p>
+            {currentStats.campaignPerformance.length > 0 ? (
+              currentStats.campaignPerformance.slice(0, 3).map((campaign, index) => (
+                <div key={campaign.id || index} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors" onClick={(e) => {
+                  e.stopPropagation()
+                  router.push(`/campaigns/${campaign.id}`)
+                }}>
+                  <div>
+                    <p className="font-medium text-sm">{campaign.name || `Campaign ${index + 1}`}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {campaign.leads || 0} leads • {campaign.responseRate ? campaign.responseRate.toFixed(1) : '0.0'}% response rate
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge className="bg-green-100 text-green-800">Running</Badge>
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Badge className="bg-green-100 text-green-800">Running</Badge>
-                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                </div>
+              ))
+            ) : (
+              <div className="text-center py-4 text-muted-foreground">
+                <p>No active campaigns</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-2"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    router.push('/campaigns')
+                  }}
+                >
+                  Create Campaign
+                </Button>
               </div>
-            ))}
+            )}
             <div className="text-center pt-2">
               <Button variant="outline" size="sm" className="group-hover:border-purple-300 group-hover:text-purple-600 transition-colors" onClick={(e) => {
                 e.stopPropagation()

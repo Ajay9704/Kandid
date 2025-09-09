@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -66,8 +66,26 @@ interface AnalyticsData {
   }
 }
 
-async function fetchAnalytics(): Promise<AnalyticsData> {
+async function fetchAnalytics(timeRange: string): Promise<AnalyticsData> {
   try {
+    // Calculate date range based on timeRange
+    const now = new Date()
+    let startDate: Date
+    
+    switch (timeRange) {
+      case '7d':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        break
+      case '30d':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        break
+      case '90d':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        break
+      default:
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    }
+
     // Fetch data from APIs with proper error handling
     const [leadsRes, campaignsRes] = await Promise.all([
       fetch('/api/leads'),
@@ -83,12 +101,17 @@ async function fetchAnalytics(): Promise<AnalyticsData> {
     const campaignsData = await campaignsRes.json()
     
     // Handle different response formats
-    const leads = Array.isArray(leadsData) ? leadsData : (leadsData.data || [])
+    let leads = Array.isArray(leadsData) ? leadsData : (leadsData.data || [])
     const campaigns = Array.isArray(campaignsData) ? campaignsData : (campaignsData.data || [])
+
+    // Filter leads by date range using the correct field
+    leads = leads.filter((lead: any) => {
+      const leadDate = new Date(lead.createdAt)
+      return leadDate >= startDate && leadDate <= now
+    })
 
     // Calculate analytics
     const totalLeads = leads.length
-    const totalCampaigns = campaigns.length
     const connectedLeads = leads.filter((lead: any) => lead.connectionStatus === 'connected').length
     const respondedLeads = leads.filter((lead: any) => lead.status === 'responded').length
     const convertedLeads = leads.filter((lead: any) => lead.status === 'converted').length
@@ -97,14 +120,120 @@ async function fetchAnalytics(): Promise<AnalyticsData> {
     const responseRate = connectedLeads > 0 ? (respondedLeads / connectedLeads) * 100 : 0
     const conversionRate = respondedLeads > 0 ? (convertedLeads / respondedLeads) * 100 : 0
 
-    // Mock trend data
+    // Calculate trend data based on actual data and time range
+    let leadsThisWeek, leadsLastWeek, connectionsThisWeek, connectionsLastWeek, responsesThisWeek, responsesLastWeek
+    
+    if (timeRange === '7d') {
+      // For 7 days, show this week vs last week
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+      
+      leadsThisWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= oneWeekAgo && leadDate <= now
+      }).length
+      
+      leadsLastWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= twoWeeksAgo && leadDate < oneWeekAgo
+      }).length
+      
+      connectionsThisWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= oneWeekAgo && leadDate <= now && lead.connectionStatus === 'connected'
+      }).length
+      
+      connectionsLastWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= twoWeeksAgo && leadDate < oneWeekAgo && lead.connectionStatus === 'connected'
+      }).length
+      
+      responsesThisWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= oneWeekAgo && leadDate <= now && lead.status === 'responded'
+      }).length
+      
+      responsesLastWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= twoWeeksAgo && leadDate < oneWeekAgo && lead.status === 'responded'
+      }).length
+    } else if (timeRange === '30d') {
+      // For 30 days, show last 15 days vs previous 15 days
+      const fifteenDaysAgo = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000)
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      
+      leadsThisWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= fifteenDaysAgo && leadDate <= now
+      }).length
+      
+      leadsLastWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= thirtyDaysAgo && leadDate < fifteenDaysAgo
+      }).length
+      
+      connectionsThisWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= fifteenDaysAgo && leadDate <= now && lead.connectionStatus === 'connected'
+      }).length
+      
+      connectionsLastWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= thirtyDaysAgo && leadDate < fifteenDaysAgo && lead.connectionStatus === 'connected'
+      }).length
+      
+      responsesThisWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= fifteenDaysAgo && leadDate <= now && lead.status === 'responded'
+      }).length
+      
+      responsesLastWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= thirtyDaysAgo && leadDate < fifteenDaysAgo && lead.status === 'responded'
+      }).length
+    } else {
+      // For 90 days, show last 45 days vs previous 45 days
+      const fortyFiveDaysAgo = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000)
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+      
+      leadsThisWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= fortyFiveDaysAgo && leadDate <= now
+      }).length
+      
+      leadsLastWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= ninetyDaysAgo && leadDate < fortyFiveDaysAgo
+      }).length
+      
+      connectionsThisWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= fortyFiveDaysAgo && leadDate <= now && lead.connectionStatus === 'connected'
+      }).length
+      
+      connectionsLastWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= ninetyDaysAgo && leadDate < fortyFiveDaysAgo && lead.connectionStatus === 'connected'
+      }).length
+      
+      responsesThisWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= fortyFiveDaysAgo && leadDate <= now && lead.status === 'responded'
+      }).length
+      
+      responsesLastWeek = leads.filter((lead: any) => {
+        const leadDate = new Date(lead.createdAt)
+        return leadDate >= ninetyDaysAgo && leadDate < fortyFiveDaysAgo && lead.status === 'responded'
+      }).length
+    }
+
     const trends = {
-      leadsThisWeek: Math.floor(totalLeads * 0.3),
-      leadsLastWeek: Math.floor(totalLeads * 0.25),
-      connectionsThisWeek: Math.floor(connectedLeads * 0.4),
-      connectionsLastWeek: Math.floor(connectedLeads * 0.35),
-      responsesThisWeek: Math.floor(respondedLeads * 0.5),
-      responsesLastWeek: Math.floor(respondedLeads * 0.4),
+      leadsThisWeek,
+      leadsLastWeek,
+      connectionsThisWeek,
+      connectionsLastWeek,
+      responsesThisWeek,
+      responsesLastWeek,
     }
 
     // Group leads by status
@@ -131,26 +260,36 @@ async function fetchAnalytics(): Promise<AnalyticsData> {
       percentage: totalLeads > 0 ? ((count as number) / totalLeads) * 100 : 0
     }))
 
+    // Campaign performance calculation
+    const campaignPerformance = campaigns.map((campaign: any) => {
+      // Find leads for this specific campaign
+      const campaignLeads = leads.filter((lead: any) => lead.campaignId === campaign.id)
+      const campaignConnected = campaignLeads.filter((lead: any) => lead.connectionStatus === 'connected').length
+      const campaignResponded = campaignLeads.filter((lead: any) => lead.status === 'responded').length
+      
+      return {
+        id: campaign.id,
+        name: campaign.name,
+        leads: campaignLeads.length,
+        connections: campaignConnected,
+        responses: campaignResponded,
+        connectionRate: campaignLeads.length > 0 ? (campaignConnected / campaignLeads.length) * 100 : 0,
+        responseRate: campaignConnected > 0 ? (campaignResponded / campaignConnected) * 100 : 0,
+        status: campaign.status
+      }
+    })
+
     return {
       overview: {
         totalLeads,
-        totalCampaigns,
+        totalCampaigns: campaigns.length,
         connectionRate,
         responseRate,
         conversionRate,
-        avgResponseTime: 2.4 // hours
+        avgResponseTime: 2.4 // hours (mock value)
       },
       trends,
-      campaignPerformance: campaigns.map((campaign: any) => ({
-        id: campaign.id,
-        name: campaign.name,
-        leads: campaign.totalLeads || Math.floor(Math.random() * 50) + 10,
-        connections: Math.floor(Math.random() * 30) + 5,
-        responses: Math.floor(Math.random() * 20) + 2,
-        connectionRate: Math.floor(Math.random() * 40) + 40,
-        responseRate: Math.floor(Math.random() * 30) + 50,
-        status: campaign.status
-      })),
+      campaignPerformance,
       leadsByStatus,
       connectionsByStatus,
       timeAnalysis: {
@@ -234,11 +373,16 @@ const connectionStatusColors = {
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState('7d')
 
-  const { data: analytics, isLoading, error } = useQuery({
+  const { data: analytics, isLoading, error, refetch } = useQuery({
     queryKey: ['analytics', timeRange],
-    queryFn: fetchAnalytics,
+    queryFn: () => fetchAnalytics(timeRange),
     staleTime: 30000, // Consider data fresh for 30 seconds
   })
+
+  // Refetch when timeRange changes
+  useEffect(() => {
+    refetch()
+  }, [timeRange, refetch])
 
   if (isLoading) {
     return (

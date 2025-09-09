@@ -1,19 +1,17 @@
-import { db } from '../lib/db'
-import { user } from '../lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { mongoAdapter } from '../lib/db/mongo-adapter'
 
 async function checkUser() {
   console.log('👤 Checking demo user...')
   
   try {
-    const demoUser = await db.select().from(user).where(eq(user.email, 'demo@linkbird.com')).limit(1)
+    const demoUser = await mongoAdapter.users.findUserByEmail('demo@linkbird.com')
     
-    if (demoUser.length > 0) {
+    if (demoUser) {
       console.log('✅ Demo user found:')
-      console.log('ID:', demoUser[0].id)
-      console.log('Name:', demoUser[0].name)
-      console.log('Email:', demoUser[0].email)
-      console.log('Email Verified:', demoUser[0].emailVerified)
+      console.log('ID:', demoUser.id)
+      console.log('Name:', demoUser.name)
+      console.log('Email:', demoUser.email)
+      console.log('Email Verified:', demoUser.emailVerified)
     } else {
       console.log('❌ Demo user not found')
     }
