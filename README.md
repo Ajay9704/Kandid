@@ -136,5 +136,6 @@ Frontend components subscribe to relevant events:
 4. Push to the branch
 5. Create a pull request
 
-## License
-MIT
+##USE BELOW CREDENTIALS FOR DEMO
+G-MAIL : demo@linkbird.com
+PASSWORD : demo123456
