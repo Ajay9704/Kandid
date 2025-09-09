@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Plus, User, Activity, Settings, Trash2 } from 'lucide-react'
 import { useToast } from '@/lib/hooks/use-toast'
+import { useRouter } from 'next/navigation'
 
 interface LinkedInAccount {
   id: string
@@ -26,6 +27,7 @@ interface LinkedInAccount {
 }
 
 export default function LinkedInAccountsPage() {
+  const router = useRouter()
   const { toast } = useToast()
   const [showAddForm, setShowAddForm] = useState(false)
   const [newAccount, setNewAccount] = useState({
@@ -278,11 +280,27 @@ export default function LinkedInAccountsPage() {
             </div>
 
             <div className="flex space-x-3 pt-4">
-              <Button variant="outline" size="sm" className="flex-1">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => {
+                  // Navigate to settings page
+                  router.push('/settings')
+                }}
+              >
                 <Settings className="w-4 h-4 mr-2" />
                 Account Settings
               </Button>
-              <Button variant="outline" size="sm" className="flex-1">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => {
+                  // Navigate to analytics page
+                  router.push('/analytics')
+                }}
+              >
                 <Activity className="w-4 h-4 mr-2" />
                 View Analytics
               </Button>

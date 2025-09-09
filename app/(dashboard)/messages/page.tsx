@@ -21,44 +21,14 @@ export default function MessagesPage() {
       // Handle different response formats
       const messages = Array.isArray(data) ? data : (data.data || [])
       
-      // Add mock data for demo if no real data
-      if (messages.length === 0) {
-        return [
-          {
-            id: '1',
-            leadName: 'Sarah Johnson',
-            company: 'Tech Corp',
-            messageType: 'Connection Request',
-            content: 'Hi Sarah, I noticed we both work in the tech industry and thought it would be great to connect!',
-            status: 'read',
-            sentAt: new Date(Date.now() - 7 * 60 * 1000).toISOString(),
-            readAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-          },
-          {
-            id: '2',
-            leadName: 'Mike Chen',
-            company: 'StartupXYZ',
-            messageType: 'Follow-up Message',
-            content: 'Thanks for connecting! I wanted to follow up on our mutual interest in tech innovation...',
-            status: 'replied',
-            sentAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-            repliedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-          },
-          {
-            id: '3',
-            leadName: 'Lisa Wang',
-            company: 'Innovation Labs',
-            messageType: 'Connection Acceptance',
-            content: 'Great to connect with you! I saw your recent post about AI trends and found it very insightful.',
-            status: 'sent',
-            sentAt: new Date(Date.now() - 23 * 60 * 1000).toISOString(),
-          }
-        ]
-      }
-      
+      // Always use real data
       return messages
     },
-    refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
+    staleTime: 0, // Don't cache, always fetch fresh data
+    gcTime: 0, // Don't cache, always fetch fresh data
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Refetch when component mounts
+    refetchInterval: 10000, // Refetch every 10 seconds for real-time updates
   })
 
   const filteredMessages = messages.filter((message: any) => {

@@ -1,5 +1,22 @@
+// NextAuth configuration - server side only
 import NextAuth, { NextAuthOptions, User } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
+import GoogleProvider from "next-auth/providers/google"
+import bcrypt from "bcryptjs"
+
+// Add this to ensure the module only runs on the server
+if (typeof window !== 'undefined') {
+  throw new Error('This module should only be imported on the server side')
+}
+
+// Only import the mongo adapter on the server side
+let mongoAdapter: any;
+try {
+  mongoAdapter = require("@/lib/db/mongo-adapter").mongoAdapter
+} catch (error) {
+  console.warn("MongoDB adapter not available in this environment:", error)
+  mongoAdapter = null
+}
 
 declare module "next-auth" {
   interface Session {
@@ -25,27 +42,40 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
+        if (!mongoAdapter) {
+          console.error("MongoDB adapter is not available")
+          return null
+        }
+
         try {
-          // Demo user for testing
-          if (credentials.email === 'demo@linkbird.com' && credentials.password === 'demo123456') {
-            return {
-              id: 'demo-user-id',
-              email: 'demo@linkbird.com',
-              name: 'Demo User',
-            }
+          // Find user in database
+          const user = await mongoAdapter.users.findUserByEmail(credentials.email)
+          
+          if (!user || !user.password) {
+            return null
           }
 
-          // For now, allow any email/password combination for demo purposes
+          // Verify password
+          const isValid = await bcrypt.compare(credentials.password, user.password)
+          
+          if (!isValid) {
+            return null
+          }
+
           return {
-            id: 'user-' + Math.random().toString(36).substring(2, 11),
-            email: credentials.email,
-            name: credentials.email.split('@')[0],
+            id: user.id,
+            email: user.email,
+            name: user.name,
           }
         } catch (error) {
           console.error("Auth error:", error)
           return null
         }
       }
+    }),
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID || "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     })
   ],
   pages: {

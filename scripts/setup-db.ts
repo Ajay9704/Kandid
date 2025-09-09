@@ -1,31 +1,113 @@
-import { runMigrations } from '../lib/db/migrate'
-import { existsSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { MongoClient } from 'mongodb'
 
-async function setup() {
-  console.log('🚀 Setting up database...')
+async function setupMongoDB() {
+  console.log('🚀 Setting up MongoDB database...')
   
   try {
-    const success = await runMigrations()
-    if (success) {
-      console.log('✅ Database setup completed!')
-      
-      // Create a .gitkeep file in the db directory to ensure it exists in git
-      const dbPath = 'sqlite.db'
-      if (!existsSync(dbPath)) {
-        writeFileSync(dbPath, '', 'utf8')
-        console.log('✅ Created empty database file')
-      }
-      
-      process.exit(0)
-    } else {
-      console.log('⚠️ Database setup completed with warnings')
-      process.exit(0)
+    // Use the DATABASE_URL from environment or default to local MongoDB
+    const mongoUrl = process.env.DATABASE_URL || 'mongodb://localhost:27017/linkbird'
+    
+    // Create MongoDB client
+    const client = new MongoClient(mongoUrl, {
+      // Serverless-friendly options
+      maxPoolSize: 1,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 5000,
+    })
+    
+    // Connect to MongoDB
+    await client.connect()
+    console.log('✅ MongoDB connection successful!')
+    
+    const db = client.db('linkbird')
+    
+    // Create collections if they don't exist
+    const collections = await db.listCollections().toArray()
+    const collectionNames = collections.map(c => c.name)
+    
+    // User collection
+    if (!collectionNames.includes('users')) {
+      await db.createCollection('users')
+      await db.collection('users').createIndex({ email: 1 }, { unique: true })
+      console.log('✅ Created users collection with email index')
     }
+    
+    // Session collection
+    if (!collectionNames.includes('sessions')) {
+      await db.createCollection('sessions')
+      await db.collection('sessions').createIndex({ token: 1 }, { unique: true })
+      console.log('✅ Created sessions collection with token index')
+    }
+    
+    // Account collection
+    if (!collectionNames.includes('accounts')) {
+      await db.createCollection('accounts')
+      console.log('✅ Created accounts collection')
+    }
+    
+    // Verification collection
+    if (!collectionNames.includes('verifications')) {
+      await db.createCollection('verifications')
+      console.log('✅ Created verifications collection')
+    }
+    
+    // Campaigns collection
+    if (!collectionNames.includes('campaigns')) {
+      await db.createCollection('campaigns')
+      await db.collection('campaigns').createIndex({ userId: 1 })
+      console.log('✅ Created campaigns collection with userId index')
+    }
+    
+    // Leads collection
+    if (!collectionNames.includes('leads')) {
+      await db.createCollection('leads')
+      await db.collection('leads').createIndex({ campaignId: 1 })
+      await db.collection('leads').createIndex({ userId: 1 })
+      console.log('✅ Created leads collection with campaignId and userId indexes')
+    }
+    
+    // LinkedIn accounts collection
+    if (!collectionNames.includes('linkedinAccounts')) {
+      await db.createCollection('linkedinAccounts')
+      await db.collection('linkedinAccounts').createIndex({ userId: 1 })
+      console.log('✅ Created linkedinAccounts collection with userId index')
+    }
+    
+    // Campaign sequences collection
+    if (!collectionNames.includes('campaignSequences')) {
+      await db.createCollection('campaignSequences')
+      await db.collection('campaignSequences').createIndex({ campaignId: 1 })
+      console.log('✅ Created campaignSequences collection with campaignId index')
+    }
+    
+    // Activity logs collection
+    if (!collectionNames.includes('activityLogs')) {
+      await db.createCollection('activityLogs')
+      await db.collection('activityLogs').createIndex({ userId: 1 })
+      console.log('✅ Created activityLogs collection with userId index')
+    }
+    
+    // Messages collection
+    if (!collectionNames.includes('messages')) {
+      await db.createCollection('messages')
+      await db.collection('messages').createIndex({ leadId: 1 })
+      console.log('✅ Created messages collection with leadId index')
+    }
+    
+    // Close connection
+    await client.close()
+    
+    console.log('✅ MongoDB database setup completed!')
+    process.exit(0)
   } catch (error) {
-    console.error('❌ Database setup failed:', error)
+    console.error('❌ MongoDB database setup failed:', error)
     process.exit(1)
   }
 }
 
-setup()
+// Run the setup if this file is executed directly
+if (require.main === module) {
+  setupMongoDB()
+}
+
+export default setupMongoDB

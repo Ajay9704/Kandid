@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
-import { db } from "@/lib/db/index"
-import * as schema from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { mongoAdapter } from "@/lib/db/mongo-adapter"
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,13 +21,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const existingUsers = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.email, email))
-      .limit(1)
+    const existingUser = await mongoAdapter.users.findUserByEmail(email)
 
-    if (existingUsers.length > 0) {
+    if (existingUser) {
       return NextResponse.json(
         { error: "User already exists" },
         { status: 400 }
@@ -40,32 +34,28 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 12)
 
     // Create user
-    const newUsers = await db
-      .insert(schema.user)
-      .values({
-        id: crypto.randomUUID(),
-        name,
-        email,
-        password: hashedPassword,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning()
+    const newUser = await mongoAdapter.users.createUser({
+      id: crypto.randomUUID(),
+      name,
+      email,
+      password: hashedPassword,
+      emailVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
 
-    const newUser = newUsers[0]
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = newUser
 
     return NextResponse.json({
       message: "User created successfully",
-      user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-      }
+      user: userWithoutPassword
     })
+
   } catch (error) {
-    console.error("Signup error:", error)
+    console.error("Error creating user:", error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to create user" },
       { status: 500 }
     )
   }

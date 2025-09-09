@@ -1,111 +1,135 @@
-# Linkbird Replica
+# Kandid Assignment - Real-time Campaign and Lead Management System
 
-A replica of the Linkbird platform for LinkedIn automation and lead generation.
+## Overview
 
-## Description
-
-This application is a replica of the Linkbird platform, designed for LinkedIn automation and lead generation. It includes features for campaign management, lead tracking, and messaging automation.
+This is a Next.js application for managing marketing campaigns and leads with real-time updates. The application provides a dashboard for tracking campaign performance, managing leads, and monitoring activity.
 
 ## Features
 
-- Campaign management
-- Lead tracking and management
-- LinkedIn account integration
-- Automated messaging sequences
-- Analytics and reporting
-- User authentication
+### Real-time Updates
+- Campaign status changes are reflected immediately across all connected clients
+- Lead updates are broadcasted in real-time to all users
+- Dashboard metrics update automatically without page refresh
+- Live view toggle for enabling/disabling real-time updates
 
-## Tech Stack
+### Campaign Management
+- Create, edit, and delete campaigns
+- Track campaign performance metrics
+- Monitor lead engagement and response rates
+- Manage campaign sequences
 
-- **Frontend**: Next.js 14, React, TypeScript
-- **Backend**: Next.js API Routes
-- **Database**: SQLite with Drizzle ORM
-- **Authentication**: NextAuth.js
-- **Styling**: Tailwind CSS, Shadcn UI
-- **State Management**: Zustand, TanStack Query
-- **Real-time**: Socket.IO
+### Lead Management
+- Add, update, and delete leads
+- Track lead status and connection status
+- Monitor lead activity and engagement
+- Filter and search leads
+
+### Analytics
+- Real-time dashboard with key metrics
+- Campaign performance tracking
+- Lead status distribution
+- Activity logs
+
+## Technical Implementation
+
+### Real-time Architecture
+The application uses a custom real-time update system built with:
+- Socket.IO for WebSocket communication
+- React Query for data fetching and caching
+- Custom hooks for socket management
+- Event-based updates for data consistency
+
+### Key Components
+
+#### Socket Provider
+- `components/socket-provider.tsx` - Provides socket context to the application
+- `lib/hooks/use-socket.ts` - Custom hook for socket connection management
+
+#### Real-time Updates
+- API routes emit events when data is modified
+- Frontend components listen for events and invalidate queries
+- React Query handles data synchronization
+
+#### Data Models
+- Campaigns with status tracking
+- Leads with connection and engagement status
+- User authentication and session management
 
 ## Getting Started
 
 ### Prerequisites
-
 - Node.js 18+
 - npm or yarn
 
 ### Installation
-
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Set up environment variables:
-   Copy `.env.example` to `.env` and update the values:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Set up the database:
-   ```bash
-   npm run db:setup
-   ```
+```bash
+npm install
+```
 
 ### Development
-
-Run the development server:
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+The application will be available at http://localhost:3000
 
-### Building for Production
-
-```bash
-npm run build
+### Environment Variables
+Create a `.env.local` file with the following variables:
+```
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-secret-key
 ```
 
-### Deployment
+## API Endpoints
 
-The application is configured to work with Vercel's serverless environment. For deployment instructions, see [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md).
+### Campaigns
+- `GET /api/campaigns` - List campaigns
+- `POST /api/campaigns` - Create campaign
+- `GET /api/campaigns/[id]` - Get campaign details
+- `PUT /api/campaigns/[id]` - Update campaign
+- `DELETE /api/campaigns/[id]` - Delete campaign
 
-## Database Configuration
+### Leads
+- `GET /api/leads` - List leads
+- `POST /api/leads` - Create lead
+- `GET /api/leads/[id]` - Get lead details
+- `PUT /api/leads/[id]` - Update lead
+- `DELETE /api/leads/[id]` - Delete lead
 
-The application automatically detects the environment and configures the database accordingly:
+## Real-time Implementation Details
 
-- **Development**: Uses file-based SQLite database (`./sqlite.db`)
-- **Production (Vercel)**: Uses in-memory SQLite database
+### Event Broadcasting
+When data is modified through the API:
+1. The API route processes the request
+2. After successful database update, an event is emitted
+3. Connected clients receive the event
+4. Client-side queries are invalidated to fetch fresh data
 
-For more details about database configuration and deployment, see:
-- [DATABASE-FIX-SUMMARY.md](DATABASE-FIX-SUMMARY.md)
-- [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md)
-- [VERCEL-DEPLOYMENT-FIX.md](VERCEL-DEPLOYMENT-FIX.md)
+### Event Listeners
+Frontend components subscribe to relevant events:
+- Campaign pages listen for `campaigns_updated` events
+- Lead pages listen for `leads_updated` events
+- Dashboard listens for both events to update metrics
 
-## Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run lint` - Run linter
-- `npm run db:setup` - Set up database
-- `npm run db:seed` - Seed database with sample data
-- `npm run verify-db-fix` - Verify database configuration fix
+### Data Consistency
+- React Query ensures consistent data across components
+- Optimistic updates provide immediate UI feedback
+- Automatic refetching maintains data accuracy
 
 ## Troubleshooting
 
-If you encounter any issues, check the following:
+### Real-time Updates Not Working
+1. Check browser console for socket connection errors
+2. Verify environment variables are set correctly
+3. Ensure the socket server is running
 
-1. **Database Connection Issues**: See [VERCEL-DEPLOYMENT-FIX.md](VERCEL-DEPLOYMENT-FIX.md)
-2. **Authentication Issues**: Check environment variables and NextAuth configuration
-3. **API Route Issues**: Check the API route implementations in `app/api/`
+### Data Not Updating
+1. Check API route responses
+2. Verify database connections
+3. Confirm event emission in API routes
 
 ## Contributing
-
 1. Fork the repository
 2. Create a feature branch
 3. Commit your changes
@@ -113,5 +137,4 @@ If you encounter any issues, check the following:
 5. Create a pull request
 
 ## License
-
-This project is for educational purposes only.
+MIT

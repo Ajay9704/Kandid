@@ -24,11 +24,7 @@ export default function SignUpPage() {
     setError('')
 
     try {
-      const result = await signUp.email({
-        name,
-        email,
-        password,
-      })
+      const result = await signUp({ name, email, password })
 
       if (result.error) {
         setError(result.error.message || 'Failed to create account')
