@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/lib/store'
-import { useSession, signOut } from '@/lib/auth-client'
+import { useSession, signOut } from 'next-auth/react'
 import { useSocket } from '@/lib/hooks/use-socket'
 import {
   LayoutDashboard,
@@ -28,6 +28,14 @@ import {
   BarChart3
 } from 'lucide-react'
 
+// Define the type for our stats
+interface SidebarStats {
+  totalLeads: number
+  activeLeads: number
+  activeCampaigns: number
+  newLeadsToday: number
+}
+
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Leads', href: '/leads', icon: Users },
@@ -40,7 +48,7 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
-async function fetchQuickStats() {
+async function fetchQuickStats(): Promise<SidebarStats> {
   try {
     const [leadsRes, campaignsRes] = await Promise.all([
       fetch('/api/leads'),
@@ -58,16 +66,29 @@ async function fetchQuickStats() {
     const leads = Array.isArray(leadsData) ? leadsData : (leadsData.data || [])
     const campaigns = Array.isArray(campaignsData) ? campaignsData : (campaignsData.data || [])
     
+    // Calculate stats
+    const totalLeads = leads.length
+    const activeLeads = leads.filter((lead: any) => 
+      ['contacted', 'responded', 'qualified', 'converted', 'nurturing'].includes(lead.status)
+    ).length
+    const activeCampaigns = campaigns.filter((campaign: any) => campaign.status === 'active').length
+    
+    // Calculate new leads today
+    const today = new Date().toDateString()
+    const newLeadsToday = leads.filter((lead: any) => {
+      try {
+        const leadDate = lead.createdAt instanceof Date ? lead.createdAt : new Date(lead.createdAt)
+        return leadDate.toDateString() === today
+      } catch (e) {
+        return false
+      }
+    }).length
+    
     return {
-      totalLeads: leads.length,
-      activeLeads: leads.filter((lead: any) => 
-        ['contacted', 'responded', 'qualified'].includes(lead.status)
-      ).length,
-      activeCampaigns: campaigns.filter((campaign: any) => campaign.status === 'active').length,
-      newLeadsToday: leads.filter((lead: any) => {
-        const today = new Date().toDateString()
-        return new Date(lead.createdAt).toDateString() === today
-      }).length
+      totalLeads,
+      activeLeads,
+      activeCampaigns,
+      newLeadsToday
     }
   } catch (error) {
     console.error('Error fetching sidebar stats:', error)
@@ -87,10 +108,14 @@ export function Sidebar() {
   const { isConnected, toggleConnection, manuallyDisconnected } = useSocket()
   const { theme, setTheme } = useTheme()
   
-  const { data: stats } = useQuery({
+  const { data: stats } = useQuery<SidebarStats>({
     queryKey: ['sidebar-stats'],
     queryFn: fetchQuickStats,
-    refetchInterval: 30000,
+    staleTime: 0, // Don't cache, always fetch fresh data
+    gcTime: 0, // Don't cache, always fetch fresh data (cacheTime was renamed to gcTime in newer versions)
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Refetch when component mounts
+    refetchInterval: 10000, // Refetch every 10 seconds for real-time updates
   })
 
   return (

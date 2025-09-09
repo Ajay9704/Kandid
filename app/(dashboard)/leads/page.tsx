@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/sheet'
 import { Search, Plus, Mail, Building, Calendar, Linkedin, User, Send, Eye, Clock } from 'lucide-react'
 import { useToast } from '@/lib/hooks/use-toast'
+import { useSocket } from '@/lib/hooks/use-socket'
 
 interface Lead {
   id: string
@@ -69,7 +70,31 @@ const connectionStatusColors = {
 async function fetchLeads(): Promise<Lead[]> {
   const response = await fetch('/api/leads')
   if (!response.ok) {
-    throw new Error('Failed to fetch leads')
+    if (response.status === 401) {
+      throw new Error('Authentication required. Please sign in.')
+    }
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.details || errorData.error || 'Failed to fetch leads')
+  }
+  const data = await response.json()
+  // Handle different response formats - make sure we return an array
+  if (Array.isArray(data)) {
+    return data
+  } else if (data.data && Array.isArray(data.data)) {
+    return data.data
+  } else {
+    return []
+  }
+}
+
+async function fetchCampaigns(): Promise<any[]> {
+  const response = await fetch('/api/campaigns')
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Authentication required. Please sign in.')
+    }
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.details || errorData.error || 'Failed to fetch campaigns')
   }
   const data = await response.json()
   // Handle different response formats
@@ -91,17 +116,49 @@ async function createLead(leadData: Partial<Lead>): Promise<Lead> {
 }
 
 async function updateLeadStatus(leadId: string, statusData: { status?: string; connectionStatus?: string }): Promise<Lead> {
-  const response = await fetch(`/api/leads/${leadId}`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(statusData),
-  })
-  if (!response.ok) {
-    throw new Error('Failed to update lead status')
+  // Add retry mechanism for failed requests
+  const maxRetries = 3;
+  let lastError: any = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(statusData),
+      });
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.details || `Lead with ID ${leadId} not found. It may have been deleted.`);
+        }
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.details || errorData.error || 'Failed to update lead status');
+      }
+      
+      const result = await response.json();
+      // Handle different response formats
+      if (result && typeof result === 'object' && 'data' in result) {
+        return result.data as Lead;
+      }
+      return result as Lead;
+    } catch (error) {
+      lastError = error;
+      // If it's a 404 error, don't retry
+      if (error instanceof Error && (error.message.includes('not found') || error.message.includes('Lead with ID'))) {
+        throw error;
+      }
+      // Wait before retrying (exponential backoff)
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+      }
+    }
   }
-  return response.json()
+  
+  throw lastError;
 }
 
 export default function LeadsPage() {
@@ -115,16 +172,41 @@ export default function LeadsPage() {
     email: '',
     company: '',
     notes: '',
+    campaignId: undefined as string | undefined,
   })
+
+  const { isConnected, on } = useSocket()
 
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
-  const { data: leads = [], isLoading, error } = useQuery({
+  // Listen for real-time updates
+  useEffect(() => {
+    const unsubscribe = on('leads_updated', () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [on, queryClient])
+
+  // Fetch leads with proper configuration for real-time updates
+  const { data: leads = [], isLoading, error, refetch } = useQuery({
     queryKey: ['leads'],
     queryFn: fetchLeads,
-    staleTime: 5000, // Consider data fresh for 5 seconds
-    refetchOnWindowFocus: false, // Don't refetch on window focus
+    staleTime: 0, // Don't cache, always fetch fresh data
+    gcTime: 0, // Don't cache, always fetch fresh data
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Refetch when component mounts
+    refetchInterval: 10000, // Refetch every 10 seconds for real-time updates
+  })
+
+  // Fetch campaigns for the dropdown
+  const { data: campaigns = [] } = useQuery({
+    queryKey: ['campaigns'],
+    queryFn: fetchCampaigns,
+    staleTime: 30000, // Consider data fresh for 30 seconds
   })
 
   const createLeadMutation = useMutation({
@@ -132,7 +214,7 @@ export default function LeadsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       setShowAddForm(false)
-      setNewLead({ name: '', email: '', company: '', notes: '' })
+      setNewLead({ name: '', email: '', company: '', notes: '', campaignId: undefined })
       toast({
         title: "Lead created",
         description: "New lead has been added successfully.",
@@ -150,9 +232,42 @@ export default function LeadsPage() {
   const updateStatusMutation = useMutation({
     mutationFn: ({ leadId, status, connectionStatus }: { leadId: string; status?: string; connectionStatus?: string }) =>
       updateLeadStatus(leadId, { status, connectionStatus }),
-    onSuccess: (updatedLead) => {
+    onMutate: async ({ leadId, status, connectionStatus }) => {
+      // Cancel any outgoing refetches to avoid overwriting our optimistic update
+      await queryClient.cancelQueries({ queryKey: ['leads'] })
+      
+      // Snapshot the previous value
+      const previousLeads = queryClient.getQueryData<Lead[]>(['leads'])
+      
+      // Optimistically update to the new value
+      if (previousLeads) {
+        queryClient.setQueryData<Lead[]>(['leads'], oldLeads => 
+          oldLeads?.map(lead => 
+            lead.id === leadId 
+              ? { ...lead, status: status || lead.status, connectionStatus: connectionStatus || lead.connectionStatus } 
+              : lead
+          )
+        )
+      }
+      
+      return { previousLeads }
+    },
+    onSuccess: (updatedLead, variables) => {
+      // Update the cache with the actual response
+      queryClient.setQueryData<Lead[]>(['leads'], oldLeads => 
+        oldLeads?.map(lead => 
+          lead.id === variables.leadId 
+            ? { ...lead, ...updatedLead } 
+            : lead
+        )
+      )
+      
+      // Also invalidate all related queries to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['sidebar-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['analytics'] })
+      
       setSelectedLead(updatedLead)
       setPendingStatusChange(null)
       toast({
@@ -160,21 +275,44 @@ export default function LeadsPage() {
         description: `Lead status changed to ${updatedLead.status}.`,
       })
     },
-    onError: (error: any) => {
+    onError: (error: any, variables, context) => {
       console.error('Status update error:', error)
+      
+      // Rollback to the previous value on error
+      if (context?.previousLeads) {
+        queryClient.setQueryData(['leads'], context.previousLeads)
+      }
+      
       setPendingStatusChange(null)
+      let description = error?.message || "Failed to update lead status. Please try again."
+      
+      // Provide more specific error messages
+      if (error?.message?.includes('not found')) {
+        description = error.message; // Use the specific error message from the API
+        // Optionally refresh the leads data
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['leads'] })
+          queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+          queryClient.invalidateQueries({ queryKey: ['sidebar-stats'] })
+          queryClient.invalidateQueries({ queryKey: ['analytics'] })
+        }, 2000)
+      }
+      
       toast({
         title: "Update failed",
-        description: error?.message || "Failed to update lead status. Please try again.",
+        description,
         variant: "destructive",
       })
     },
-    retry: 1, // Retry failed requests once
+    onSettled: () => {
+      // Always refetch after error or success to ensure we have the latest data
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
   })
 
-  const filteredLeads = leads.filter(lead => {
-    const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredLeads = leads.filter((lead: Lead) => {
+    const matchesSearch = (lead.name && lead.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (lead.email && lead.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (lead.company && lead.company.toLowerCase().includes(searchTerm.toLowerCase()))
     const matchesStatus = statusFilter === 'all' || lead.status === statusFilter
     return matchesSearch && matchesStatus
@@ -183,7 +321,11 @@ export default function LeadsPage() {
   const handleCreateLead = (e: React.FormEvent) => {
     e.preventDefault()
     if (newLead.name && newLead.email) {
-      createLeadMutation.mutate(newLead)
+      const leadData = { ...newLead }
+      if (!leadData.campaignId) {
+        delete leadData.campaignId
+      }
+      createLeadMutation.mutate(leadData)
     }
   }
 
@@ -270,6 +412,21 @@ export default function LeadsPage() {
                 />
               </div>
               <div>
+                <label className="text-sm font-medium">Campaign</label>
+                <select
+                  value={newLead.campaignId || ''}
+                  onChange={(e) => setNewLead({ ...newLead, campaignId: e.target.value || undefined })}
+                  className="w-full p-2 border rounded-md bg-background"
+                >
+                  <option value="">No Campaign</option>
+                  {campaigns.map((campaign) => (
+                    <option key={campaign.id} value={campaign.id}>
+                      {campaign.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="text-sm font-medium">Notes</label>
                 <Input
                   value={newLead.notes}
@@ -277,8 +434,8 @@ export default function LeadsPage() {
                   placeholder="Add any notes"
                 />
               </div>
-              <Button
-                type="submit"
+              <Button 
+                type="submit" 
                 className="w-full"
                 disabled={createLeadMutation.isPending}
               >
@@ -354,8 +511,8 @@ export default function LeadsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredLeads.map((lead) => (
-                <TableRow key={lead.id}>
+              {filteredLeads.map((lead: Lead) => (
+                <TableRow key={`${lead.id}-${lead.updatedAt}`}>
                   <TableCell>
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
@@ -375,7 +532,7 @@ export default function LeadsPage() {
                   </TableCell>
                   <TableCell>
                     <Badge className={connectionStatusColors[lead.connectionStatus as keyof typeof connectionStatusColors] || connectionStatusColors.not_connected}>
-                      {lead.connectionStatus?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Not Connected'}
+                      {lead.connectionStatus?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Not Connected'}
                     </Badge>
                   </TableCell>
                   <TableCell>

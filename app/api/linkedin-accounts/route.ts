@@ -1,38 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { mongoAdapter } from '@/lib/db/mongo-adapter'
+import { nanoid } from 'nanoid'
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 
 export async function GET() {
   try {
-    // Return mock LinkedIn accounts data
-    const mockAccounts = [
-      {
-        id: '1',
-        name: 'John Smith',
-        email: 'john.smith@linkedin.com',
-        profileUrl: 'https://linkedin.com/in/johnsmith',
-        profileImage: 'https://media.licdn.com/dms/image/profile.jpg',
-        connectionCount: 1247,
-        isActive: true,
-        isPrimary: true,
-        dailyRequestLimit: 50,
-        dailyRequestsUsed: 23,
-        weeklyRequestLimit: 200,
-        weeklyRequestsUsed: 89,
-        lastActivity: new Date(),
-        connectedAt: new Date('2024-01-01'),
-        settings: {
-          autoConnect: true,
-          autoMessage: false,
-          workingHours: {
-            start: '09:00',
-            end: '17:00',
-            timezone: 'UTC'
-          },
-          workingDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-        }
-      }
-    ]
+    // Get session for user authentication
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Fetch LinkedIn accounts from database
+    const accounts = await mongoAdapter.linkedinAccounts.findLinkedInAccountsByUserId(session.user.id)
     
-    return NextResponse.json(mockAccounts)
+    return NextResponse.json(accounts)
   } catch (error) {
     console.error('Error fetching LinkedIn accounts:', error)
     return NextResponse.json({ error: 'Failed to fetch accounts' }, { status: 500 })
@@ -41,37 +24,36 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Get session for user authentication
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await request.json()
     const { name, linkedinUrl, dailyLimit = 50, weeklyLimit = 200 } = body
 
     const newAccount = {
-      id: Math.random().toString(36).substring(2, 11),
+      id: nanoid(),
       name,
       email: `${name.toLowerCase().replace(' ', '.')}@linkedin.com`,
-      profileUrl: linkedinUrl,
+      linkedinUrl,
       profileImage: null,
-      connectionCount: 0,
       isActive: true,
       isPrimary: false,
-      dailyRequestLimit: dailyLimit,
-      dailyRequestsUsed: 0,
-      weeklyRequestLimit: weeklyLimit,
-      weeklyRequestsUsed: 0,
-      lastActivity: new Date(),
-      connectedAt: new Date(),
-      settings: {
-        autoConnect: false,
-        autoMessage: false,
-        workingHours: {
-          start: '09:00',
-          end: '17:00',
-          timezone: 'UTC'
-        },
-        workingDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-      }
+      dailyLimit,
+      weeklyLimit,
+      currentDailyCount: 0,
+      currentWeeklyCount: 0,
+      lastResetDate: new Date(),
+      userId: session.user.id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
-    return NextResponse.json(newAccount)
+    // Insert into database
+    const dbResult = await mongoAdapter.linkedinAccounts.createLinkedInAccount(newAccount)
+    return NextResponse.json(dbResult)
   } catch (error) {
     console.error('Error creating LinkedIn account:', error)
     return NextResponse.json({ error: 'Failed to create account' }, { status: 500 })

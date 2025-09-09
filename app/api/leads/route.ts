@@ -1,73 +1,80 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db/index"
-import { leads, campaigns } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { mongoAdapter } from "@/lib/db/mongo-adapter"
 import { nanoid } from "nanoid"
-import { getMockLeads, addMockLead, type MockLead } from "@/lib/mock-leads-store"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { emitServerUpdateEvent } from "@/lib/socket-server-utils"
 
 export async function GET(request: NextRequest) {
   try {
-    // Try to fetch from database first
-    try {
-      const dbLeads = await db.select({
-        id: leads.id,
-        name: leads.name,
-        email: leads.email,
-        company: leads.company,
-        position: leads.position,
-        linkedinUrl: leads.linkedinUrl,
-        profileImage: leads.profileImage,
-        location: leads.location,
-        status: leads.status,
-        connectionStatus: leads.connectionStatus,
-        sequenceStep: leads.sequenceStep,
-        lastContactDate: leads.lastContactDate,
-        lastActivity: leads.lastActivity,
-        lastActivityDate: leads.lastActivityDate,
-        notes: leads.notes,
-        campaignId: leads.campaignId,
-        userId: leads.userId,
-        createdAt: leads.createdAt,
-        updatedAt: leads.updatedAt,
-      }).from(leads)
-
-      // Map database fields back to expected format
-      const allLeads = dbLeads.map(lead => ({
-        id: lead.id,
-        name: lead.name,
-        email: lead.email,
-        company: lead.company,
-        position: lead.position,
-        linkedinUrl: lead.linkedinUrl,
-        profileImage: lead.profileImage,
-        location: lead.location,
-        status: lead.status,
-        connectionStatus: lead.connectionStatus,
-        sequenceStep: lead.sequenceStep,
-        lastContactDate: lead.lastContactDate,
-        lastActivity: lead.lastActivity,
-        lastActivityDate: lead.lastActivityDate,
-        notes: lead.notes,
-        campaignId: lead.campaignId,
-        userId: lead.userId,
-        createdAt: lead.createdAt,
-        updatedAt: lead.updatedAt,
-      }))
-
-      return NextResponse.json(allLeads)
-    } catch (dbError) {
-      console.log("Database not ready, returning mock data")
-      // Return mock data from shared store
-      return NextResponse.json(getMockLeads())
+    // Get session for user authentication
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Parse query parameters for pagination and filtering
+    const { searchParams } = new URL(request.url)
+    const campaignId = searchParams.get('campaignId') || undefined
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '50')
+    const offset = (page - 1) * limit
+    const status = searchParams.get('status') || undefined
+    const connectionStatus = searchParams.get('connectionStatus') || undefined
+    const search = searchParams.get('search') || undefined
+
+    let result;
+    
+    // If campaignId is specified, fetch leads for that campaign
+    if (campaignId) {
+      result = await mongoAdapter.leads.findLeadsByCampaignId(campaignId, {
+        limit,
+        offset,
+        status,
+        connectionStatus,
+        search
+      })
+    } else {
+      // If no campaignId specified, fetch all leads for the user
+      result = await mongoAdapter.leads.findLeadsByUserId(session.user.id, {
+        limit,
+        offset,
+        status,
+        connectionStatus,
+        search
+      })
+    }
+
+    const totalPages = Math.ceil(result.total / limit)
+
+    return NextResponse.json({
+      data: result.data,
+      pagination: {
+        page,
+        limit,
+        total: result.total,
+        totalPages,
+        hasMore: page < totalPages,
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+        source: "database",
+      }
+    })
   } catch (error) {
     console.error("Error fetching leads:", error)
-    return NextResponse.json({ error: "Failed to fetch leads" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch leads", details: (error as Error).message }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    // Get session for user authentication
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await request.json()
     const { name, email, company, position, status = "pending", notes, campaignId } = body
 
@@ -76,38 +83,35 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new lead
-    const newLead: MockLead = {
+    const newLead = {
       id: nanoid(),
       name,
       email,
-      company: company || null,
-      position: position || null,
-      linkedinUrl: null,
-      profileImage: null,
-      location: null,
+      company: company || undefined,
+      position: position || undefined,
+      linkedinUrl: undefined,
+      profileImage: undefined,
+      location: undefined,
       status,
       connectionStatus: "not_connected",
       sequenceStep: 0,
-      lastContactDate: null,
+      lastContactDate: undefined,
       lastActivity: "Lead created",
       lastActivityDate: new Date(),
-      notes: notes || null,
-      campaignId: campaignId || "campaign-1", // Use valid campaign ID from database
-      userId: "demo-user-id",
+      notes: notes || undefined,
+      campaignId: campaignId || undefined, // Allow undefined campaignId
+      userId: session.user.id, // Use actual user ID from session
       createdAt: new Date(),
       updatedAt: new Date(),
     }
 
-    // Try to insert into database, fallback to mock store
-    try {
-      const dbResult = await db.insert(leads).values(newLead).returning()
-      return NextResponse.json(dbResult[0])
-    } catch (dbError) {
-      console.log("Database not ready, adding to mock store")
-      // Add to shared mock store
-      addMockLead(newLead)
-      return NextResponse.json(newLead)
-    }
+    // Insert into database
+    const dbResult = await mongoAdapter.leads.createLead(newLead)
+    
+    // Emit event for real-time updates
+    emitServerUpdateEvent('leads_updated', { ...dbResult })
+    
+    return NextResponse.json(dbResult)
   } catch (error) {
     console.error("Error creating lead:", error)
     return NextResponse.json({ error: "Failed to create lead" }, { status: 500 })

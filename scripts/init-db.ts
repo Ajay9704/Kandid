@@ -1,4 +1,3 @@
-import { runMigrations } from '../lib/db/migrate'
 import { existsSync, writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
 
@@ -13,16 +12,9 @@ async function initDatabase() {
       console.log(`✅ Created database directory: ${dbDir}`)
     }
     
-    // Run migrations
-    const success = await runMigrations()
-    
-    if (success) {
-      console.log('✅ Database initialization completed successfully!')
-      process.exit(0)
-    } else {
-      console.log('❌ Database initialization failed!')
-      process.exit(1)
-    }
+    // For MongoDB, we don't need migrations
+    console.log('✅ Database initialization completed successfully!')
+    process.exit(0)
   } catch (error) {
     console.error('❌ Database initialization error:', error)
     process.exit(1)

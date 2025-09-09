@@ -13,13 +13,5 @@
         ]
       }
     }
-  ],
-  "env": {
-    "DATABASE_URL": ":memory:"
-  },
-  "build": {
-    "env": {
-      "DATABASE_URL": ":memory:"
-    }
-  }
+  ]
 }

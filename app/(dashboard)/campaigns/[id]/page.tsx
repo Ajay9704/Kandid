@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,12 +23,44 @@ import {
   Eye
 } from 'lucide-react'
 import { useToast } from '@/lib/hooks/use-toast'
+import { useSocket } from '@/lib/hooks/use-socket'
 
 export default function CampaignDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const { isConnected, on } = useSocket()
+
+  // Move campaignId declaration to the top, right after hooks
+  const campaignId = params.id as string
+
+  // Validate campaignId early
+  if (!campaignId) {
+    return <div>Campaign not found</div>
+  }
+
+  // Listen for real-time updates
+  useEffect(() => {
+    const unsubscribe = on('campaigns_updated', () => {
+      if (campaignId) {
+        queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })
+      }
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+    })
+
+    const unsubscribeLeads = on('leads_updated', () => {
+      if (campaignId) {
+        queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })
+      }
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+    })
+
+    return () => {
+      unsubscribe()
+      unsubscribeLeads()
+    }
+  }, [on, queryClient, campaignId])
 
   // All hooks must be called at the top level, before any conditional logic
   const [sequences] = useState([
@@ -90,13 +122,6 @@ export default function CampaignDetailPage() {
     description: '',
   })
 
-  // Move all conditional rendering logic after all hooks
-  if (!params?.id) {
-    return <div>Campaign not found</div>
-  }
-
-  const campaignId = params.id as string
-
   const { data: campaign, isLoading, error } = useQuery({
     queryKey: ['campaign', campaignId],
     queryFn: async () => {
@@ -125,6 +150,7 @@ export default function CampaignDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })
       queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+      queryClient.invalidateQueries({ queryKey: ['sidebar-stats'] })
       toast({
         title: "Campaign updated",
         description: "Campaign has been updated successfully.",
@@ -132,10 +158,20 @@ export default function CampaignDetailPage() {
     },
   })
 
-  const handleToggleStatus = () => {
-    if (!campaign) return
-    const newStatus = campaign.status === 'active' ? 'paused' : 'active'
-    updateCampaignMutation.mutate({ status: newStatus })
+  const handleToggleStatus = async () => {
+    try {
+      const newStatus = campaign.status === 'active' ? 'paused' : 'active'
+      
+      // Use the mutation instead of direct fetch for better error handling
+      updateCampaignMutation.mutate({ status: newStatus })
+    } catch (error) {
+      console.error('Error updating campaign status:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update campaign status. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleSaveChanges = () => {
