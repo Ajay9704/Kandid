@@ -9,12 +9,19 @@ let isInitialized = false
 const initializeMongoDB = async () => {
   console.log('🍃 Initializing MongoDB database')
   try {
+    // Check if we're in a Vercel environment
+    const isVercel = process.env.VERCEL === '1'
+    
     // Use MongoDB Atlas connection string for Vercel, fallback to local for development
-    const mongoUrl = process.env.DATABASE_URL || 'mongodb://localhost:27017/linkbird'
+    const mongoUrl = process.env.DATABASE_URL || (isVercel ? undefined : 'mongodb://localhost:27017/linkbird')
     
     // Validate MongoDB URL
     if (!mongoUrl) {
-      throw new Error('DATABASE_URL environment variable is not set')
+      if (isVercel) {
+        throw new Error('DATABASE_URL environment variable is required for Vercel deployment. Please set it in your Vercel project settings.')
+      } else {
+        throw new Error('DATABASE_URL environment variable is not set')
+      }
     }
     
     console.log(`🔗 Connecting to MongoDB at: ${mongoUrl.includes('mongodb.net') ? 'MongoDB Atlas (cloud)' : 'Local MongoDB'}`)
@@ -161,6 +168,10 @@ export const getDatabase = async () => {
 // Initialize database
 initializeDatabase().catch(error => {
   console.error('❌ Failed to initialize database:', error)
+  // In Vercel environment, we should not exit the process
+  if (process.env.VERCEL !== '1') {
+    process.exit(1)
+  }
 })
 
 export { db, client }

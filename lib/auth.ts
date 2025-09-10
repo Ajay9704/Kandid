@@ -69,6 +69,10 @@ export const authOptions: NextAuthOptions = {
           }
         } catch (error) {
           console.error("Auth error:", error)
+          // Check if this is a database connection error
+          if (error instanceof Error && error.message.includes('Database not initialized')) {
+            console.error('Database connection error during authentication. This may be due to missing DATABASE_URL environment variable in Vercel.')
+          }
           return null
         }
       }
