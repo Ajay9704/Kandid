@@ -81,6 +81,54 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=your-secret-key
 ```
 
+## Database Setup
+
+### Local Development (MongoDB)
+For local development, you can use a local MongoDB instance:
+1. Install MongoDB on your machine
+2. Start the MongoDB service
+3. Use the default connection string: `mongodb://localhost:27017/linkbird`
+
+### Production Deployment (MongoDB Atlas)
+For Vercel deployment or production environments, you need to use MongoDB Atlas (cloud MongoDB):
+
+1. **Sign up for MongoDB Atlas:**
+   - Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
+   - Create a free account or sign in
+
+2. **Create a new cluster:**
+   - Click "Build a Cluster"
+   - Select the free tier (M0 Sandbox)
+   - Choose a cloud provider and region
+   - Click "Create Cluster"
+
+3. **Configure database access:**
+   - Go to "Database Access" in the left sidebar
+   - Click "Add New Database User"
+   - Create a user with read and write permissions
+   - Save the username and password
+
+4. **Configure network access:**
+   - Go to "Network Access" in the left sidebar
+   - Click "Add IP Address"
+   - For development, add your current IP address
+   - For production/Vercel, you can add `0.0.0.0/0` (allow all) but this is less secure
+
+5. **Get your connection string:**
+   - Go to "Clusters" in the left sidebar
+   - Click "Connect" on your cluster
+   - Select "Connect your application"
+   - Copy the connection string
+   - Replace `<password>` with your actual password
+   - Replace `myFirstDatabase` with `linkbird`
+
+6. **Set up environment variables in Vercel:**
+   - In your Vercel project, go to Settings > Environment Variables
+   - Add a new variable:
+     - Name: `DATABASE_URL`
+     - Value: Your MongoDB Atlas connection string
+   - Add any other required environment variables
+
 ## API Endpoints
 
 ### Campaigns
@@ -128,6 +176,11 @@ Frontend components subscribe to relevant events:
 1. Check API route responses
 2. Verify database connections
 3. Confirm event emission in API routes
+
+### Database Connection Issues
+1. Ensure MongoDB is running (for local development)
+2. Check your DATABASE_URL environment variable
+3. For Vercel deployment, ensure you're using MongoDB Atlas, not localhost
 
 ## Contributing
 1. Fork the repository

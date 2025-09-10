@@ -1,66 +1,47 @@
 import { MongoClient, Db } from 'mongodb'
 import * as schema from './schema'
 
-// More robust serverless environment detection
-const isServerless = () => {
-  // Check for Vercel environment
-  if (process.env.VERCEL === '1' || process.env.NOW_REGION || process.env.VERCEL_ENV) {
-    console.log('🔍 Detected Vercel environment')
-    return true
-  }
-  
-  // Check for other serverless platforms
-  if (process.env.NEXT_RUNTIME === 'edge' || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    console.log('🔍 Detected other serverless environment')
-    return true
-  }
-  
-  // Check for production environment that might be serverless
-  if (process.env.NODE_ENV === 'production' && !process.env.DEVELOPMENT) {
-    console.log('🔍 Detected production environment (assuming serverless)')
-    return true
-  }
-  
-  console.log('🔍 Not in serverless environment')
-  return false
-}
-
-console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`)
-console.log(`🔧 Vercel: ${process.env.VERCEL || 'not set'}`)
-console.log(`🔧 VERCEL_ENV: ${process.env.VERCEL_ENV || 'not set'}`)
-console.log(`🔧 NEXT_RUNTIME: ${process.env.NEXT_RUNTIME || 'not set'}`)
-console.log(`🔧 DATABASE_URL: ${process.env.DATABASE_URL || 'not set'}`)
-
 let db: Db | null = null
 let client: MongoClient | null = null
+let isInitialized = false
 
-// Check if we should use MongoDB
-const useMongoDB = () => {
-  // Use MongoDB if explicitly set in environment or in Vercel with MongoDB URL
-  return process.env.VERCEL === '1' || process.env.DATABASE_URL?.includes('mongodb') || isServerless()
-}
-
-// Enhanced MongoDB initialization
+// Enhanced MongoDB initialization for Vercel deployment
 const initializeMongoDB = async () => {
   console.log('🍃 Initializing MongoDB database')
   try {
+    // Use MongoDB Atlas connection string for Vercel, fallback to local for development
     const mongoUrl = process.env.DATABASE_URL || 'mongodb://localhost:27017/linkbird'
     
-    // Create MongoDB client
+    // Validate MongoDB URL
+    if (!mongoUrl) {
+      throw new Error('DATABASE_URL environment variable is not set')
+    }
+    
+    console.log(`🔗 Connecting to MongoDB at: ${mongoUrl.includes('mongodb.net') ? 'MongoDB Atlas (cloud)' : 'Local MongoDB'}`)
+    
+    // Create MongoDB client with Vercel-optimized settings
     client = new MongoClient(mongoUrl, {
-      // Serverless-friendly options
+      // Vercel-friendly options
       maxPoolSize: 1,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 5000,
+      retryWrites: true,
+      retryReads: true,
+      minPoolSize: 0,
+      maxIdleTimeMS: 30000,
     })
     
     // Connect to MongoDB
     await client.connect()
     db = client.db('linkbird')
     
+    // Test the connection
+    await db.admin().ping()
+    
     // Create collections if they don't exist and add indexes
     await createCollections()
     
+    isInitialized = true
     console.log('✅ MongoDB database connected successfully')
     return { client, db }
   } catch (error) {
@@ -153,41 +134,28 @@ const createCollections = async () => {
   }
 }
 
-// Enhanced serverless database initialization with better error handling
-const initializeServerlessDatabase = async () => {
-  console.log('☁️  Initializing serverless database')
-  try {
-    // For serverless environments, we'll use MongoDB
-    return await initializeMongoDB()
-  } catch (error) {
-    console.error('❌ Failed to initialize serverless database:', error)
-    throw error
-  }
-}
-
-// Enhanced file-based database initialization with better error handling
-const initializeFileDatabase = () => {
-  console.log('📁 Initializing file-based database (fallback)')
-  // This is a fallback - in a real implementation you might want to use a different approach
-  throw new Error('File-based database not supported with MongoDB implementation')
-}
-
 // Main database initialization logic
 export const initializeDatabase = async () => {
   try {
-    // For serverless environments, use MongoDB
-    if (useMongoDB()) {
-      const result = await initializeServerlessDatabase()
-      return result
-    } else {
-      // For development/local environments, try to use MongoDB as well
-      const result = await initializeMongoDB()
-      return result
-    }
+    const result = await initializeMongoDB()
+    return result
   } catch (error) {
     console.error('❌ Critical database initialization failed:', error)
     throw error
   }
+}
+
+// Function to get database instance with lazy initialization
+export const getDatabase = async () => {
+  if (!isInitialized) {
+    try {
+      await initializeDatabase()
+    } catch (error) {
+      console.error('❌ Failed to initialize database on demand:', error)
+      throw error
+    }
+  }
+  return { db, client }
 }
 
 // Initialize database

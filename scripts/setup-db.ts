@@ -7,12 +7,22 @@ async function setupMongoDB() {
     // Use the DATABASE_URL from environment or default to local MongoDB
     const mongoUrl = process.env.DATABASE_URL || 'mongodb://localhost:27017/linkbird'
     
-    // Create MongoDB client
+    // Validate MongoDB URL
+    if (!mongoUrl) {
+      throw new Error('DATABASE_URL environment variable is not set')
+    }
+    
+    console.log(`🔗 Connecting to MongoDB at: ${mongoUrl.includes('mongodb.net') ? 'MongoDB Atlas (cloud)' : 'Local MongoDB'}`)
+    
+    // Create MongoDB client with Vercel-friendly options
     const client = new MongoClient(mongoUrl, {
-      // Serverless-friendly options
       maxPoolSize: 1,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 5000,
+      retryWrites: true,
+      retryReads: true,
+      minPoolSize: 0,
+      maxIdleTimeMS: 30000,
     })
     
     // Connect to MongoDB
@@ -20,6 +30,9 @@ async function setupMongoDB() {
     console.log('✅ MongoDB connection successful!')
     
     const db = client.db('linkbird')
+    
+    // Test the connection
+    await db.admin().ping()
     
     // Create collections if they don't exist
     const collections = await db.listCollections().toArray()
@@ -98,6 +111,7 @@ async function setupMongoDB() {
     await client.close()
     
     console.log('✅ MongoDB database setup completed!')
+    
     process.exit(0)
   } catch (error) {
     console.error('❌ MongoDB database setup failed:', error)
